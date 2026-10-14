@@ -1,0 +1,114 @@
+{% extends "admin/dashboard.html" %}
+{% block title %}Upload Backlog Sheet{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h2 class="fw-bold mb-0">Upload Backlog Sheet</h2>
+    <p class="text-muted mb-0">Import pending backlogs so remedial batches can be created for Computer Engineering</p>
+  </div>
+  <a href="{{ url_for('admin.upload_results') }}" class="btn btn-outline-secondary"><i class="bi bi-file-earmark-bar-graph me-1"></i> Exam Results</a>
+</div>
+
+<div class="row g-4">
+  <div class="col-md-7">
+    <form method="post" enctype="multipart/form-data" class="card shadow-sm p-4">
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Academic Batch <span class="text-danger">*</span></label>
+        <select name="academic_batch" class="form-select" required>
+          <option value="">Select batch…</option>
+          {% for b in academic_batches %}
+          <option value="{{ b }}" {% if summary and summary.academic_batch == b %}selected{% endif %}>{{ b }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Semester of the backlog subject <span class="text-danger">*</span></label>
+        <select name="semester" class="form-select" required>
+          <option value="">Select semester…</option>
+          {% for s in semesters %}
+          <option value="{{ s }}" {% if summary and summary.semester == s %}selected{% endif %}>Semester {{ s }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Backlog File (.xlsx or .csv) <span class="text-danger">*</span></label>
+        <input type="file" name="file" class="form-control" accept=".xlsx,.csv" required>
+        <div class="form-text">Columns: Student ID / Roll, Name, Subject, optional Subject Code / Semester / Result.</div>
+      </div>
+      <div class="mb-3 form-check form-switch bg-light p-3 rounded border">
+        <input class="form-check-input ms-0 me-2" type="checkbox" name="auto_schedule" value="1" id="autoScheduleCheck" checked>
+        <label class="form-check-label fw-semibold" for="autoScheduleCheck">
+          <i class="bi bi-magic text-success me-1"></i> Auto-generate 3:30 PM – 4:30 PM timetable
+        </label>
+      </div>
+      <button type="submit" class="btn btn-primary btn-lg w-100 mt-2">
+        <i class="bi bi-cloud-arrow-up me-2"></i> Upload Backlog Sheet
+      </button>
+    </form>
+  </div>
+  <div class="col-md-5">
+    <div class="card shadow-sm border-0 bg-light p-3">
+      <h6 class="fw-bold text-primary mb-3"><i class="bi bi-info-circle-fill me-1"></i> How backlog import works</h6>
+      <ul class="list-group list-group-flush bg-transparent small">
+        <li class="list-group-item bg-transparent px-0">Rows without a Result column are treated as <strong>FAIL</strong> (backlog).</li>
+        <li class="list-group-item bg-transparent px-0">A college-format result Excel is accepted; only FAIL subjects are imported.</li>
+        <li class="list-group-item bg-transparent px-0">Remedial batches are created from the imported backlogs.</li>
+        <li class="list-group-item bg-transparent px-0">Scheduled classes use the after-college slot <strong>3:30 PM – 4:30 PM</strong>.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+{% if summary %}
+<div class="card shadow-sm mt-4 border-success">
+  <div class="card-header bg-success text-white py-3">
+    <h5 class="mb-0 fw-bold"><i class="bi bi-check-circle-fill me-2"></i> Backlog Upload Summary</h5>
+  </div>
+  <div class="card-body">
+    <div class="alert alert-light border mb-3">
+      <strong>Batch:</strong> {{ summary.academic_batch }} &nbsp;|&nbsp;
+      <strong>Semester:</strong> {{ summary.semester }}
+    </div>
+    <div class="row g-3">
+      <div class="col-md-3">
+        <div class="p-3 bg-light rounded text-center">
+          <div class="small text-muted">Backlog Records</div>
+          <h3 class="fw-bold mb-0 text-danger">{{ summary.inserted }}</h3>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="p-3 bg-light rounded text-center">
+          <div class="small text-muted">Students</div>
+          <h3 class="fw-bold mb-0 text-primary">{{ summary.students_found }}</h3>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="p-3 bg-light rounded text-center">
+          <div class="small text-muted">Remedial Batches</div>
+          <h3 class="fw-bold mb-0 text-dark">{{ summary.batches_created }}</h3>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="p-3 bg-light rounded text-center">
+          <div class="small text-muted">Slots 3:30–4:30</div>
+          <h3 class="fw-bold mb-0 text-success">{{ summary.scheduled_count }}</h3>
+        </div>
+      </div>
+    </div>
+    {% if summary.skipped %}
+    <div class="mt-3">
+      <h6 class="text-warning fw-bold">Skipped / Notice Logs:</h6>
+      <ul class="text-muted small mb-0">
+        {% for msg in summary.skipped[:10] %}<li>{{ msg }}</li>{% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+    <div class="mt-3 pt-3 border-top d-flex gap-2 flex-wrap">
+      <a href="{{ url_for('admin.failure_list', academic_batch=summary.academic_batch, semester=summary.semester) }}" class="btn btn-sm btn-outline-danger">View Backlog / Failure List</a>
+      <a href="{{ url_for('admin.timetable') }}" class="btn btn-sm btn-primary">View Timetable</a>
+      <a href="{{ url_for('admin.batches') }}" class="btn btn-sm btn-outline-secondary">View Batches</a>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

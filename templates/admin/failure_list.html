@@ -1,0 +1,127 @@
+{% extends "admin/dashboard.html" %}
+{% block title %}Failure List{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center">
+  <h2>Failure List — Computer Engineering</h2>
+  <div class="d-flex gap-2">
+    <span class="badge bg-danger fs-6 align-self-center">{{ total }} failed records ({{ unique_students }} students)</span>
+    <a href="{{ url_for('admin.export_failures', semester=semester or '', academic_batch=academic_batch or '') }}" class="btn btn-sm btn-outline-success">
+      <i class="bi bi-download me-1"></i> Export CSV
+    </a>
+  </div>
+</div>
+<p class="text-muted">Students marked <strong>FAIL</strong> in the uploaded result sheets — filtered by batch &amp; semester</p>
+
+{# ── Summary Totals by Batch × Semester ── #}
+{% if batch_totals %}
+<div class="card shadow-sm mb-4 border-warning">
+  <div class="card-header bg-warning bg-opacity-10 py-3">
+    <h6 class="mb-0 fw-bold"><i class="bi bi-bar-chart-fill text-warning me-2"></i>Failure Summary by Batch &amp; Semester</h6>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Academic Batch</th>
+            <th>Semester</th>
+            <th>Total Fail Records</th>
+            <th>Unique Students</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for bt in batch_totals %}
+          <tr>
+            <td><span class="badge bg-primary">{{ bt.academic_batch }}</span></td>
+            <td>Semester {{ bt.semester }}</td>
+            <td><span class="badge bg-danger">{{ bt.fail_count }}</span></td>
+            <td>{{ bt.student_count }}</td>
+            <td>
+              <a href="{{ url_for('admin.failure_list', academic_batch=bt.academic_batch, semester=bt.semester) }}" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-eye me-1"></i>View
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{# ── Filters ── #}
+<form method="get" class="row g-2 mb-3">
+  <div class="col-md-2">
+    <input type="text" name="q" value="{{ q }}" class="form-control" placeholder="Search name or ID">
+  </div>
+  <div class="col-md-2">
+    <input type="text" name="subject" value="{{ subject_q }}" class="form-control" placeholder="Filter by subject">
+  </div>
+  <div class="col-md-2">
+    <select name="academic_batch" class="form-select">
+      <option value="">All Batches</option>
+      {% for b in academic_batches %}
+      <option value="{{ b }}" {% if academic_batch == b %}selected{% endif %}>{{ b }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-md-2">
+    <select name="semester" class="form-select">
+      <option value="">All Semesters</option>
+      {% for s in semesters %}
+      <option value="{{ s }}" {% if semester == s %}selected{% endif %}>Semester {{ s }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-md-2">
+    <button class="btn btn-primary w-100"><i class="bi bi-funnel me-1"></i>Filter</button>
+  </div>
+  <div class="col-md-2">
+    <a href="{{ url_for('admin.failure_list') }}" class="btn btn-secondary w-100">Clear</a>
+  </div>
+</form>
+
+{# ── Failure Table ── #}
+<div class="table-responsive">
+  <table class="table table-striped table-hover">
+    <thead class="table-dark">
+      <tr>
+        <th>#</th>
+        <th>Student ID</th>
+        <th>Name</th>
+        <th>Batch</th>
+        <th>Sem</th>
+        <th>Subject</th>
+        <th>Result</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for f in failures %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td>{{ f.student_id }}</td>
+        <td>{{ f.student_name }}</td>
+        <td><span class="badge bg-primary bg-opacity-75">{{ f.academic_batch or '—' }}</span></td>
+        <td>{{ f.semester }}</td>
+        <td>{{ f.subject_name }}</td>
+        <td>
+          {% if f.result == 'PASS' %}
+          <span class="badge bg-success">Pass</span>
+          {% else %}
+          <span class="badge bg-danger">Fail</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="7" class="text-muted text-center py-4">
+          No failures found for the selected filters. Upload a result file to extract the failure list.
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

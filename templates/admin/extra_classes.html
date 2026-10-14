@@ -1,0 +1,72 @@
+{% extends "admin/dashboard.html" %}
+{% block title %}Extra Class Enrollments{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h2 class="fw-bold mb-0">Extra Class Enrollments</h2>
+    <p class="text-muted mb-0">Students enrolled for after-college remedial classes (3:30 PM – 5:00 PM)</p>
+  </div>
+  {% if enrollments %}
+  <span class="badge bg-primary fs-6">{{ enrollments|length }} enrollment{{ 's' if enrollments|length != 1 else '' }}</span>
+  {% endif %}
+</div>
+
+<form method="get" class="row g-2 mb-3">
+  <div class="col-md-3">
+    <select name="subject_id" class="form-select">
+      <option value="">All Subjects</option>
+      {% for s in subjects %}
+      <option value="{{ s.id }}" {% if filter_subject == s.id %}selected{% endif %}>{{ s.name }} ({{ s.code }})</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-md-2">
+    <select name="status" class="form-select">
+      <option value="">All Status</option>
+      <option value="ENROLLED" {% if filter_status == 'ENROLLED' %}selected{% endif %}>Enrolled</option>
+      <option value="WITHDRAWN" {% if filter_status == 'WITHDRAWN' %}selected{% endif %}>Withdrawn</option>
+    </select>
+  </div>
+  <div class="col-md-2"><button class="btn btn-primary w-100">Filter</button></div>
+  <div class="col-md-2"><a href="{{ url_for('admin.extra_classes') }}" class="btn btn-secondary w-100">Clear</a></div>
+</form>
+
+<div class="card shadow-sm">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-striped table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Student ID</th>
+            <th>Student Name</th>
+            <th>Subject</th>
+            <th>Batch</th>
+            <th>Status</th>
+            <th>Enrolled On</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for e in enrollments %}
+          <tr>
+            <td>{{ e.student_id_text }}</td>
+            <td>{{ e.student_name }}</td>
+            <td>{{ e.subject_name }} <small class="text-muted">({{ e.subject_code }})</small></td>
+            <td>{{ e.batch_code or '—' }}</td>
+            <td>
+              {% if e.status == 'ENROLLED' %}
+              <span class="badge bg-success">Enrolled</span>
+              {% else %}
+              <span class="badge bg-secondary">Withdrawn</span>
+              {% endif %}
+            </td>
+            <td>{{ e.requested_at }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" class="text-muted text-center py-3">No enrollments found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,32 @@
+{% extends "admin/dashboard.html" %}
+{% block title %}Teachers{% endblock %}
+{% block content %}
+<h2>Teachers / Mentors</h2>
+<div class="row">
+  <div class="col-md-5">
+    <form method="post" class="card p-3">
+      <h5>Add Teacher</h5>
+      <div class="mb-2"><input name="employee_id" class="form-control" placeholder="Employee ID" required></div>
+      <div class="mb-2"><input name="full_name" class="form-control" placeholder="Full Name" required></div>
+      {% if user.role == 'super_admin' %}
+      <div class="mb-2">
+        <select name="department_id" class="form-select" required>
+          {% for d in departments %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}
+        </select>
+      </div>
+      {% endif %}
+      <button class="btn btn-primary btn-sm">Add</button>
+    </form>
+  </div>
+  <div class="col-md-7">
+    <table class="table">
+      <thead><tr><th>ID</th><th>Name</th><th>Department</th></tr></thead>
+      <tbody>
+        {% for t in teachers %}
+        <tr><td>{{ t.employee_id }}</td><td>{{ t.full_name }}</td><td>{{ t.dept_code }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

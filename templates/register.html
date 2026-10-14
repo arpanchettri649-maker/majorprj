@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Student registration — Academic Support{% endblock %}
+{% block auth_content %}
+<div class="login-page d-flex align-items-center justify-content-center min-vh-100">
+  <div class="card shadow login-card">
+    <div class="card-body p-4">
+      <h3 class="text-center mb-1">Student Registration</h3>
+      <p class="text-center text-muted mb-4">Create a student account using your roll number</p>
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }}">{{ message }}</div>
+        {% endfor %}
+      {% endwith %}
+      <form method="post">
+        <div class="mb-3">
+          <label class="form-label">Roll Number</label>
+          <input type="text" name="roll_number" class="form-control" value="{{ form.roll_number }}" autocomplete="username" required autofocus>
+          <div class="form-text">Use the roll/enrollment number issued by your department.</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Full Name</label>
+          <input type="text" name="full_name" class="form-control" value="{{ form.full_name }}" autocomplete="name" required>
+        </div>
+        <div class="row">
+          <div class="col-md-6 mb-3">
+            <label class="form-label">Semester</label>
+            <select name="semester" class="form-select" required>
+              {% for s in semesters %}
+              <option value="{{ s }}" {% if form.semester == s|string %}selected{% endif %}>{{ s }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6 mb-3">
+            <label class="form-label">Section</label>
+           <input type="text" name="section" class="form-control" value="{{ form.section }}" required>
+           <div class="form-text">Example: A</div>
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Password</label>
+          <div class="input-group"><input type="password" name="password" id="register-password" class="form-control" autocomplete="new-password" required><button class="btn btn-outline-secondary" type="button" data-toggle-password="#register-password"><i class="bi bi-eye"></i></button></div>
+          <div class="form-text">At least 4 characters.</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Confirm Password</label>
+          <input type="password" name="confirm_password" class="form-control" autocomplete="new-password" required>
+        </div>
+        <button type="submit" class="btn btn-primary w-100">Register</button>
+      </form>
+      <div class="text-center mt-3">
+        <a href="{{ url_for('auth.login') }}">Already have an account? Login</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

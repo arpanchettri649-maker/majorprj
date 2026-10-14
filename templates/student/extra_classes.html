@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Extra Classes{% endblock %}
+{% block sidebar %}
+<ul class="nav flex-column gap-2">
+  <li><a href="{{ url_for('student.dashboard') }}" class="text-white"><i class="bi bi-house me-1"></i> Dashboard</a></li>
+  <li><a href="{{ url_for('student.attendance_dashboard') }}" class="text-white"><i class="bi bi-bar-chart me-1"></i> Attendance</a></li>
+  <li><a href="{{ url_for('student.routine') }}" class="text-white"><i class="bi bi-calendar3 me-1"></i> Routine</a></li>
+  <li><a href="{{ url_for('student.extra_classes') }}" class="text-white"><i class="bi bi-clock-history me-1"></i> Extra Classes</a></li>
+</ul>
+{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h2 class="fw-bold mb-0">Extra Classes</h2>
+    <p class="text-muted mb-0">After-college remedial classes · 3:30 PM – 5:00 PM</p>
+  </div>
+</div>
+
+{% if enrolled_subjects %}
+<div class="card shadow-sm mb-4 border-success">
+  <div class="card-header bg-success bg-opacity-10 py-3">
+    <h6 class="mb-0 fw-bold text-success"><i class="bi bi-check-circle me-2"></i>Your Enrolled Extra Classes</h6>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Subject</th>
+            <th>Batch</th>
+            <th>Peer Mentor</th>
+            <th>Enrolled On</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for e in enrolled_subjects %}
+          <tr>
+            <td>{{ e.subject_name }} <small class="text-muted">({{ e.subject_code }})</small></td>
+            <td>{{ e.batch_code or '—' }}</td>
+            <td>{{ e.mentor_name or '—' }}</td>
+            <td>{{ e.requested_at }}</td>
+            <td>
+              <form method="post" action="{{ url_for('student.withdraw_extra_class') }}">
+                <input type="hidden" name="request_id" value="{{ e.id }}">
+                <button class="btn btn-sm btn-outline-danger">Withdraw</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div class="card shadow-sm">
+  <div class="card-header bg-white py-3">
+    <h6 class="mb-0 fw-bold"><i class="bi bi-journal-plus me-2"></i>Available Subjects for Extra Classes</h6>
+  </div>
+  <div class="card-body">
+    {% if available_subjects %}
+    <div class="row g-3">
+      {% for s in available_subjects %}
+      <div class="col-md-6">
+        <div class="card h-100">
+          <div class="card-body">
+            <h6 class="card-title">{{ s.subject_name }}</h6>
+            <p class="card-text text-muted small mb-2">{{ s.subject_code }} · Semester {{ s.semester }}</p>
+            {% if s.mentor_name %}
+            <p class="card-text small"><i class="bi bi-person-check text-success me-1"></i>Mentor: {{ s.mentor_name }}</p>
+            {% endif %}
+            <form method="post" action="{{ url_for('student.enroll_extra_class') }}">
+              <input type="hidden" name="subject_id" value="{{ s.subject_id }}">
+              <input type="hidden" name="batch_id" value="{{ s.batch_id }}">
+              <button class="btn btn-sm btn-primary"><i class="bi bi-plus-circle me-1"></i>Enroll</button>
+            </form>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-muted mb-0">No extra classes available at this time.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

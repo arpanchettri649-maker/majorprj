@@ -1,0 +1,339 @@
+{% extends "admin/dashboard.html" %}
+{% block title %}Routine / Timetable{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h2 class="fw-bold mb-0">Routine / Timetable</h2>
+    <p class="text-muted mb-0">After-college remedial routine (3:30 PM – 4:30 PM) — Computer Engineering</p>
+  </div>
+  <div class="d-flex gap-2">
+    <form method="post" action="{{ url_for('admin.generate_timetable_action') }}" class="d-inline">
+      <button type="submit" class="btn btn-success"><i class="bi bi-magic me-1"></i> Auto-Generate Routine</button>
+    </form>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addSlotModal">
+      <i class="bi bi-plus-lg me-1"></i> Add Slot
+    </button>
+  </div>
+</div>
+
+<div class="alert alert-info py-2 px-3 mb-3 d-flex align-items-center shadow-sm">
+  <i class="bi bi-info-circle-fill fs-5 text-primary me-2"></i>
+  <div class="small">
+    <strong>Schedule Rules:</strong> Remedial classes are conducted after college from <strong>3:30 PM to 4:30 PM</strong>.
+    To prevent overload and student clashes, <strong>no two classes for the same semester are conducted on the same day</strong>.
+    Department Admins can auto-generate or edit slots directly below.
+  </div>
+</div>
+
+{# ── Filters ── #}
+<form method="get" class="row g-2 mb-3">
+  <div class="col-md-3">
+    <select name="day" class="form-select">
+      <option value="">All Days</option>
+      {% for d in days %}
+      <option value="{{ d }}" {% if day_filter == d %}selected{% endif %}>{{ d }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-md-3">
+    <select name="teacher_id" class="form-select">
+      <option value="">All Teachers</option>
+      {% for t in all_teachers %}
+      <option value="{{ t.id }}" {% if teacher_filter == t.id %}selected{% endif %}>{{ t.full_name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-md-3">
+    <select name="room_id" class="form-select">
+      <option value="">All Rooms</option>
+      {% for c in all_classrooms %}
+      <option value="{{ c.id }}" {% if room_filter == c.id %}selected{% endif %}>{{ c.room_code }} (Cap: {{ c.capacity }})</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-md-3 d-flex gap-2">
+    <button class="btn btn-primary flex-grow-1"><i class="bi bi-funnel me-1"></i>Filter</button>
+    <a href="{{ url_for('admin.timetable') }}" class="btn btn-secondary">Clear</a>
+  </div>
+</form>
+
+<div class="card shadow-sm mb-4">
+  <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+    <h6 class="mb-0 fw-bold"><i class="bi bi-calendar3 text-primary me-2"></i>Weekly Routine (3:30 PM – 4:30 PM)</h6>
+    <span class="badge bg-secondary">{{ entries|length }} Slot(s) Scheduled</span>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-bordered mb-0 routine-table">
+        <thead class="table-dark">
+          <tr>
+            <th class="day-col text-center" style="width: 140px;">Day</th>
+            {% for start, end in slots %}
+            <th class="text-center">
+              <div>{{ start }} – {{ end }}</div>
+              <small class="fw-normal text-warning">After College (3:30–4:30 PM)</small>
+            </th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for day in days %}
+          {% if not day_filter or day_filter == day %}
+          <tr>
+            <td class="fw-bold bg-light text-center day-col align-middle">{{ day }}</td>
+            {% for start, end in slots %}
+            <td class="p-2 align-top">
+              {% set cell_entries = [] %}
+              {% for e in entries %}
+                {% if e.day_of_week == day and e.start_time == start %}
+                  {% if cell_entries.append(e) %}{% endif %}
+                {% endif %}
+              {% endfor %}
+              {% for e in cell_entries %}
+              <div class="routine-cell p-2 mb-2 rounded border bg-white shadow-sm">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <span class="badge bg-primary">Sem {{ e.semester }}</span>
+                  <span class="badge bg-light text-dark border">{{ e.room_code or '—' }}</span>
+                </div>
+                <div class="sub fw-bold text-dark">{{ e.subject_name }}</div>
+                <div class="small text-muted">{{ e.academic_batch or e.batch_code }} &bull; {{ e.student_count }} student(s)</div>
+                <div class="small text-secondary mt-1"><i class="bi bi-person me-1"></i>{{ e.teacher_name or '—' }}</div>
+                <div class="mt-2 pt-1 border-top d-flex justify-content-between align-items-center">
+                  <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2"
+                          data-bs-toggle="modal" data-bs-target="#editSlotModal"
+                          data-slot-id="{{ e.id }}"
+                          data-day="{{ e.day_of_week }}"
+                          data-start="{{ e.start_time }}"
+                          data-end="{{ e.end_time }}"
+                          data-teacher="{{ e.teacher_id }}"
+                          data-room="{{ e.classroom_id }}">
+                    <i class="bi bi-pencil me-1"></i>Edit
+                  </button>
+                  <form method="post" action="{{ url_for('admin.delete_timetable_slot', slot_id=e.id) }}" class="d-inline">
+                    <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" onclick="return confirm('Remove this slot from the routine?')">
+                      <i class="bi bi-trash me-1"></i>Remove
+                    </button>
+                  </form>
+                </div>
+              </div>
+              {% else %}
+              <div class="text-muted text-center py-3">—</div>
+              {% endfor %}
+            </td>
+            {% endfor %}
+          </tr>
+          {% endif %}
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{# ── Scheduled Slots List ── #}
+<div class="card shadow-sm">
+  <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+    <h6 class="mb-0 fw-bold"><i class="bi bi-list-check text-primary me-2"></i>All Scheduled Slots (Department Admin Edit Panel)</h6>
+    <span class="small text-muted">Showing {{ entries|length }} scheduled routine entries</span>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Day</th>
+            <th>Time Slot</th>
+            <th>Semester</th>
+            <th>Batch Code</th>
+            <th>Subject</th>
+            <th>Teacher</th>
+            <th>Room</th>
+            <th>Students</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for e in entries %}
+          <tr>
+            <td class="fw-semibold">{{ e.day_of_week }}</td>
+            <td><span class="badge bg-light text-dark border">{{ e.start_time }} – {{ e.end_time }} (3:30–4:30 PM)</span></td>
+            <td><span class="badge bg-primary">Sem {{ e.semester }}</span></td>
+            <td><code>{{ e.batch_code }}</code></td>
+            <td>
+              <div class="fw-semibold">{{ e.subject_name }}</div>
+              <small class="text-muted">{{ e.subject_code }}</small>
+            </td>
+            <td>{{ e.teacher_name or '—' }}</td>
+            <td><span class="badge bg-secondary">{{ e.room_code or '—' }} (Cap: {{ e.capacity }})</span></td>
+            <td>{{ e.student_count }}</td>
+            <td class="text-end">
+              <button type="button" class="btn btn-sm btn-outline-primary me-1"
+                      data-bs-toggle="modal" data-bs-target="#editSlotModal"
+                      data-slot-id="{{ e.id }}"
+                      data-day="{{ e.day_of_week }}"
+                      data-start="{{ e.start_time }}"
+                      data-end="{{ e.end_time }}"
+                      data-teacher="{{ e.teacher_id }}"
+                      data-room="{{ e.classroom_id }}">
+                <i class="bi bi-pencil me-1"></i>Edit
+              </button>
+              <form method="post" action="{{ url_for('admin.delete_timetable_slot', slot_id=e.id) }}" class="d-inline">
+                <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Remove slot for {{ e.batch_code }}?')">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="9" class="text-center text-muted py-4">
+              No routine slots scheduled yet. Click <strong>Auto-Generate Routine</strong> or <strong>Add Slot</strong> above.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{# ── Add Slot Modal ── #}
+<div class="modal fade" id="addSlotModal" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="post" action="{{ url_for('admin.add_timetable_slot') }}" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title fw-bold"><i class="bi bi-plus-circle me-2 text-primary"></i>Add Routine Slot</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-info py-2 small mb-3">
+          <i class="bi bi-info-circle me-1"></i>
+          Remedial classes are conducted after college from <strong>3:30 PM to 4:30 PM</strong>.
+          Classes for the same semester cannot be scheduled on the same day.
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Remedial Batch <span class="text-danger">*</span></label>
+          <select name="batch_id" class="form-select" required>
+            <option value="">Select batch…</option>
+            {% for b in pending_batches %}
+            <option value="{{ b.id }}">{{ b.batch_code }} — {{ b.subject_name }} (Sem {{ b.semester }}, Batch {{ b.academic_batch or '—' }})</option>
+            {% else %}
+            <option value="" disabled>No pending batches — all scheduled or upload results first</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Day <span class="text-danger">*</span></label>
+          <select name="day_of_week" class="form-select" required>
+            {% for d in days %}
+            <option value="{{ d }}">{{ d }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Time Slot <span class="text-danger">*</span></label>
+          <select name="start_time" class="form-select" required>
+            {% for start, end in slots %}
+            <option value="{{ start }}" {% if start == '15:30' %}selected{% endif %}>{{ start }} – {{ end }} (3:30 PM – 4:30 PM)</option>
+            {% endfor %}
+          </select>
+          <input type="hidden" name="end_time" value="16:30">
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Teacher <span class="text-danger">*</span></label>
+          <select name="teacher_id" class="form-select" required>
+            <option value="">Select teacher…</option>
+            {% for t in all_teachers %}
+            <option value="{{ t.id }}">{{ t.full_name }} ({{ t.employee_id }})</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Classroom <span class="text-danger">*</span></label>
+          <select name="classroom_id" class="form-select" required>
+            <option value="">Select room…</option>
+            {% for c in all_classrooms %}
+            <option value="{{ c.id }}">{{ c.room_code }} (Capacity: {{ c.capacity }})</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Add Slot</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# ── Edit Slot Modal ── #}
+<div class="modal fade" id="editSlotModal" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="post" id="editSlotForm" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title fw-bold"><i class="bi bi-pencil me-2 text-primary"></i>Edit Routine Slot</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-info py-2 small mb-3">
+          <i class="bi bi-info-circle me-1"></i>
+          Remedial classes are conducted after college (<strong>3:30 PM – 4:30 PM</strong>).
+          Do not schedule more than one class for the same semester on the same day.
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Day <span class="text-danger">*</span></label>
+          <select name="day_of_week" id="editDay" class="form-select" required>
+            {% for d in days %}
+            <option value="{{ d }}">{{ d }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Time Slot <span class="text-danger">*</span></label>
+          <select name="start_time" id="editStart" class="form-select" required>
+            {% for start, end in slots %}
+            <option value="{{ start }}">{{ start }} – {{ end }} (3:30 PM – 4:30 PM)</option>
+            {% endfor %}
+          </select>
+          <input type="hidden" name="end_time" id="editEnd" value="16:30">
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Teacher <span class="text-danger">*</span></label>
+          <select name="teacher_id" id="editTeacher" class="form-select" required>
+            {% for t in all_teachers %}
+            <option value="{{ t.id }}">{{ t.full_name }} ({{ t.employee_id }})</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Classroom <span class="text-danger">*</span></label>
+          <select name="classroom_id" id="editRoom" class="form-select" required>
+            {% for c in all_classrooms %}
+            <option value="{{ c.id }}">{{ c.room_code }} (Capacity: {{ c.capacity }})</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+document.getElementById('editSlotModal').addEventListener('show.bs.modal', function (event) {
+  var btn = event.relatedTarget;
+  var slotId = btn.getAttribute('data-slot-id');
+  document.getElementById('editSlotForm').action = '{{ url_for("admin.edit_timetable_slot", slot_id=0) }}'.replace('/0', '/' + slotId);
+  document.getElementById('editDay').value = btn.getAttribute('data-day');
+  document.getElementById('editStart').value = btn.getAttribute('data-start');
+  document.getElementById('editTeacher').value = btn.getAttribute('data-teacher');
+  document.getElementById('editRoom').value = btn.getAttribute('data-room');
+  var endVal = btn.getAttribute('data-end') || '16:30';
+  var editEndElem = document.getElementById('editEnd');
+  if (editEndElem) editEndElem.value = endVal;
+});
+</script>
+{% endblock %}

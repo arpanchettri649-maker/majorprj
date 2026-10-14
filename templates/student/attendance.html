@@ -1,0 +1,99 @@
+{% extends "student/dashboard.html" %}
+{% block title %}Attendance Dashboard{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h2 class="fw-bold mb-0">Attendance Dashboard</h2>
+    <p class="text-muted mb-0">{{ student.full_name }} · {{ student.student_id }} · {{ low_threshold }}% required per subject</p>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-4">
+    <div class="card shadow-sm h-100"><div class="card-body">
+      <div class="text-muted small">Overall</div>
+      <h3 class="fw-bold mb-0">{{ overall_attendance }}%</h3>
+    </div></div>
+  </div>
+  <div class="col-md-4">
+    <div class="card shadow-sm h-100"><div class="card-body">
+      <div class="text-muted small">Present</div>
+      <h3 class="fw-bold mb-0 text-success">{{ present_count }}</h3>
+    </div></div>
+  </div>
+  <div class="col-md-4">
+    <div class="card shadow-sm h-100"><div class="card-body">
+      <div class="text-muted small">Total Classes</div>
+      <h3 class="fw-bold mb-0">{{ total_classes }}</h3>
+    </div></div>
+  </div>
+</div>
+
+<div class="card shadow-sm mb-4">
+  <div class="card-header bg-white">
+    <h6 class="mb-0 fw-bold"><i class="bi bi-bar-chart-fill text-primary me-2"></i>Subject-wise Attendance</h6>
+  </div>
+  <div class="card-body">
+    {% if attendance_summary %}
+    <canvas id="attendanceBarChart" height="140"></canvas>
+    {% else %}
+    <p class="text-muted mb-0">No attendance records yet.</p>
+    {% endif %}
+  </div>
+</div>
+
+{% if attendance_summary %}
+<div class="card shadow-sm mb-4">
+  <div class="card-header bg-white"><h6 class="mb-0 fw-bold">Subject-wise status</h6></div>
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead><tr><th>Subject</th><th>Attended</th><th>Total</th><th>Attendance %</th><th>Status</th></tr></thead>
+      <tbody>
+        {% for s in attendance_summary %}
+        <tr>
+          <td>{{ s.subject_name }} <small class="text-muted">({{ s.subject_code }})</small></td>
+          <td>{{ s.present_count }}</td>
+          <td>{{ s.total_count }}</td>
+          <td>
+            {% if s.percent < low_threshold %}
+            <span class="badge bg-danger">{{ s.percent }}%</span>
+            {% else %}
+            <span class="badge bg-success">{{ s.percent }}%</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if s.percent < low_threshold %}
+            <span class="badge bg-danger">Weak Student</span>
+            {% else %}
+            <span class="badge bg-success">Satisfactory</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<div class="card shadow-sm">
+  <div class="card-header bg-white"><h6 class="mb-0 fw-bold">Attendance History</h6></div>
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead><tr><th>Date</th><th>Subject</th><th>Batch</th><th>Status</th></tr></thead>
+      <tbody>
+        {% for a in attendance %}
+        <tr>
+          <td>{{ a.attendance_date }}</td>
+          <td>{{ a.subject_name }}</td>
+          <td>{{ a.batch_code }}</td>
+          <td><span class="badge bg-{{ 'success' if a.status == 'PRESENT' else 'danger' }}">{{ a.status }}</span></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="text-muted text-center py-3">No attendance records.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Notifications{% endblock %}
+{% block sidebar %}
+{# Inherit sidebar from the user's role — minimal sidebar for notifications page #}
+<ul class="nav flex-column gap-1">
+  <li class="nav-item"><a href="{{ url_for('auth.index') }}" class="nav-link text-white"><i class="bi bi-house me-2"></i> Home</a></li>
+  <li class="nav-item"><a href="{{ url_for('auth.notifications') }}" class="nav-link text-white active"><i class="bi bi-bell me-2"></i> Notifications</a></li>
+</ul>
+{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h2 class="fw-bold mb-0">Notifications</h2>
+    <p class="text-muted mb-0">Your recent notifications and alerts</p>
+  </div>
+  {% if notifications %}
+  <form method="post" action="{{ url_for('auth.mark_all_notifications_read') }}">
+    <button type="submit" class="btn btn-outline-primary btn-sm"><i class="bi bi-check-all me-1"></i>Mark All as Read</button>
+  </form>
+  {% endif %}
+</div>
+
+{% if notifications %}
+<div class="list-group shadow-sm">
+  {% for n in notifications %}
+  <div class="list-group-item d-flex justify-content-between align-items-start py-3 {% if not n.is_read %}bg-light border-start border-4 border-primary{% endif %}">
+    <div class="me-3">
+      <div class="{% if not n.is_read %}fw-bold{% endif %}">
+        {% if not n.is_read %}<i class="bi bi-circle-fill text-primary me-1" style="font-size:0.5rem;vertical-align:middle;"></i>{% endif %}
+        {{ n.message }}
+      </div>
+      <div class="small text-muted mt-1"><i class="bi bi-clock me-1"></i>{{ n.created_at }}</div>
+    </div>
+    {% if not n.is_read %}
+    <form method="post" action="{{ url_for('auth.mark_notification_read', id=n.id) }}">
+      <button type="submit" class="btn btn-sm btn-outline-secondary"><i class="bi bi-check"></i> Read</button>
+    </form>
+    {% else %}
+    <span class="badge bg-light text-muted border">Read</span>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card shadow-sm">
+  <div class="card-body text-center py-5 text-muted">
+    <i class="bi bi-bell-slash fs-1 mb-3 d-block"></i>
+    <p class="mb-0">No notifications yet.</p>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

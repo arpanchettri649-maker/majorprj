@@ -1,0 +1,151 @@
+{% extends "admin/dashboard.html" %}
+{% block title %}Peer Teachers{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h2 class="fw-bold mb-0">Peer Teachers</h2>
+    <p class="text-muted mb-0">Top-performing students who conduct after-college remedial help from <strong>3:30 PM to 4:30 PM</strong></p>
+  </div>
+  <form method="post" action="{{ url_for('admin.auto_assign_mentors') }}">
+    <button class="btn btn-success"><i class="bi bi-magic me-1"></i>Auto-Assign Peer Teachers</button>
+  </form>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-4">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <div class="text-muted small">Assigned Peer Teachers</div>
+        <h3 class="fw-bold mb-0">{{ mentors|length }}</h3>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <div class="text-muted small">Batches Without a Peer Teacher</div>
+        <h3 class="fw-bold mb-0 {% if unmentored_batches %}text-warning{% endif %}">{{ unmentored_batches|length }}</h3>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <div class="text-muted small">Eligible Toppers</div>
+        <h3 class="fw-bold mb-0">{{ eligible_mentors|length }}</h3>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card shadow-sm mb-4">
+  <div class="card-header bg-white py-3">
+    <h6 class="mb-0 fw-bold"><i class="bi bi-person-plus me-2 text-primary"></i>Assign a Peer Teacher</h6>
+  </div>
+  <div class="card-body">
+    {% if unmentored_batches and eligible_mentors %}
+    <form method="post" action="{{ url_for('admin.assign_mentor') }}" class="row g-2 align-items-end">
+      <div class="col-md-5">
+        <label class="form-label">Remedial Batch needing help</label>
+        <select name="batch_id" class="form-select" required>
+          <option value="">Select batch…</option>
+          {% for b in unmentored_batches %}
+          <option value="{{ b.id }}">{{ b.batch_code }} — {{ b.subject_name }} (Sem {{ b.semester }}, {{ b.student_count }} student(s))</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-5">
+        <label class="form-label">Peer Teacher (zero-fail topper)</label>
+        <select name="mentor_student_id" class="form-select" required>
+          <option value="">Select peer teacher…</option>
+          {% for s in eligible_mentors %}
+          <option value="{{ s.id }}">{{ s.student_id }} — {{ s.full_name }} (Sem {{ s.semester }}{{ '/' ~ s.section if s.section }}, Avg: {{ s.avg_marks|round(1) if s.avg_marks else 'N/A' }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <button class="btn btn-primary w-100">Assign</button>
+      </div>
+    </form>
+    {% elif not unmentored_batches %}
+    <p class="text-muted mb-0">Every remedial batch currently has a peer teacher, or no batches exist yet.</p>
+    {% else %}
+    <p class="text-warning mb-0">No eligible toppers found (students with zero failures and recorded marks). Upload results first.</p>
+    {% endif %}
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-8">
+    <div class="card shadow-sm">
+      <div class="card-header bg-white py-3">
+        <h6 class="mb-0 fw-bold"><i class="bi bi-people-fill me-2"></i>Current Peer Teacher Assignments</h6>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-striped table-hover mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Peer Teacher</th>
+                <th>Roll No.</th>
+                <th>Teacher Sem</th>
+                <th>Batch / Subject</th>
+                <th>Students</th>
+                <th>Assigned</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for m in mentors %}
+              <tr>
+                <td class="fw-semibold">{{ m.mentor_name }}</td>
+                <td><code>{{ m.mentor_student_id_text }}</code></td>
+                <td>Sem {{ m.mentor_semester }}{% if m.mentor_section %} / {{ m.mentor_section }}{% endif %}</td>
+                <td>
+                  <div>{{ m.subject_name }}</div>
+                  <small class="text-muted">{{ m.batch_code }} · Sem {{ m.semester }}</small>
+                </td>
+                <td><span class="badge bg-primary">{{ m.mentee_count }}</span></td>
+                <td>
+                  <span class="badge {{ 'bg-info' if m.assigned_by == 'AUTO' else 'bg-primary' }}">{{ m.assigned_by }}</span>
+                  <div class="small text-muted">{{ m.assigned_at }}</div>
+                </td>
+                <td>
+                  <form method="post" action="{{ url_for('admin.remove_mentor', mentor_id=m.id) }}" style="display:inline">
+                    <button class="btn btn-sm btn-outline-danger" title="Remove"><i class="bi bi-trash"></i></button>
+                  </form>
+                </td>
+              </tr>
+              {% else %}
+              <tr><td colspan="7" class="text-muted text-center py-3">No peer teachers assigned yet. Use Auto-Assign or fill the form above.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-white py-3">
+        <h6 class="mb-0 fw-bold"><i class="bi bi-star me-2 text-warning"></i>Eligible Peer Teachers</h6>
+      </div>
+      <div class="card-body p-0">
+        <ul class="list-group list-group-flush">
+          {% for s in eligible_mentors %}
+          <li class="list-group-item d-flex justify-content-between align-items-start">
+            <div>
+              <div class="fw-semibold">{{ s.full_name }}</div>
+              <div class="small text-muted">{{ s.student_id }} · Sem {{ s.semester }}</div>
+            </div>
+            <span class="badge bg-success">{{ s.avg_marks|round(1) if s.avg_marks else '—' }}</span>
+          </li>
+          {% else %}
+          <li class="list-group-item text-muted">No toppers available.</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

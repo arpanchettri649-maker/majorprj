@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Teacher Dashboard{% endblock %}
+{% block sidebar %}
+<ul class="nav flex-column gap-2">
+  <li><a href="{{ url_for('teacher.dashboard') }}" class="text-white"><i class="bi bi-house"></i> Dashboard</a></li>
+</ul>
+{% endblock %}
+{% block content %}
+<div class="page-heading"><div><span class="eyebrow">Teaching workspace</span><h2>Teacher Dashboard</h2><p class="text-muted mb-0">Attendance and remedial classes assigned to you.</p></div></div>
+<div class="row g-3 mt-2"><div class="col-md-4"><div class="metric-card"><span>Upcoming classes</span><strong>{{ upcoming|length }}</strong></div></div><div class="col-md-4"><div class="metric-card"><span>Assigned batches</span><strong>{{ batches|length }}</strong></div></div></div>
+<h5 class="mt-4">Upcoming classes</h5>
+<div class="table-responsive">
+  <table class="table table-bordered">
+    <thead><tr><th>Date</th><th>Batch</th><th>Subject</th><th>Day</th><th>Time</th><th>Room</th></tr></thead>
+    <tbody>
+      {% for c in upcoming %}
+      <tr>
+        <td>{{ c.class_date }}</td>
+        <td>{{ c.batch_code }}</td>
+        <td>{{ c.subject_name }}</td>
+        <td>{{ c.day_of_week }}</td>
+        <td>{{ c.start_time }} – {{ c.end_time }}</td>
+        <td>{{ c.room_code }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="text-muted">No upcoming classes scheduled.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<h5 class="mt-4">Assigned remedial batches</h5>
+<div class="row g-3">
+  {% for b in batches %}
+  <div class="col-md-4">
+    <div class="card">
+      <div class="card-body">
+        <h6>{{ b.batch_code }}</h6>
+        <p class="mb-1">{{ b.subject_name }}</p>
+        <p class="small text-muted">{{ b.student_count }} students · {{ b.status }}</p>
+        <a href="{{ url_for('teacher.batch_detail', batch_id=b.id) }}" class="btn btn-sm btn-primary">Mark Attendance</a>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <p class="text-muted">No batches assigned yet.</p>
+  {% endfor %}
+</div>
+{% endblock %}

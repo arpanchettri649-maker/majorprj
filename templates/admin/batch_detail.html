@@ -1,0 +1,190 @@
+{% extends "admin/dashboard.html" %}
+{% block title %}Batch Detail — {{ batch.batch_code }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h2 class="fw-bold mb-0">{{ batch.batch_code }}</h2>
+    <p class="text-muted mb-0">{{ batch.subject_name }} ({{ batch.subject_code }}) — Semester {{ batch.semester }}, Section {{ batch.section }}</p>
+  </div>
+  <a href="{{ url_for('admin.batches') }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back to Batches</a>
+</div>
+
+{# ── Batch Info Card ── #}
+<div class="row g-3 mb-4">
+  <div class="col-md-8">
+    <div class="card shadow-sm">
+      <div class="card-header bg-white py-3">
+        <h6 class="mb-0 fw-bold"><i class="bi bi-info-circle text-primary me-2"></i>Batch Information</h6>
+      </div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-4">
+            <div class="small text-muted">Department</div>
+            <div class="fw-semibold">{{ batch.dept_name }} ({{ batch.dept_code }})</div>
+          </div>
+          <div class="col-md-4">
+            <div class="small text-muted">Academic Batch</div>
+            <div class="fw-semibold">{{ batch.academic_batch or '—' }}</div>
+          </div>
+          <div class="col-md-4">
+            <div class="small text-muted">Status</div>
+            <div>
+              {% if batch.status == 'PENDING' %}
+              <span class="badge bg-warning text-dark">{{ batch.status }}</span>
+              {% elif batch.status == 'SCHEDULED' %}
+              <span class="badge bg-primary">{{ batch.status }}</span>
+              {% elif batch.status == 'IN_PROGRESS' %}
+              <span class="badge bg-info">{{ batch.status }}</span>
+              {% elif batch.status == 'COMPLETED' %}
+              <span class="badge bg-success">{{ batch.status }}</span>
+              {% else %}
+              <span class="badge bg-secondary">{{ batch.status }}</span>
+              {% endif %}
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="small text-muted">Teacher</div>
+            <div class="fw-semibold">{{ batch.teacher_name or 'Not assigned' }}</div>
+          </div>
+          <div class="col-md-4">
+            <div class="small text-muted">Classroom</div>
+            <div class="fw-semibold">{{ batch.room_code or 'Not assigned' }}{% if batch.capacity %} (Cap: {{ batch.capacity }}){% endif %}</div>
+          </div>
+          <div class="col-md-4">
+            <div class="small text-muted">Created</div>
+            <div class="fw-semibold">{{ batch.created_at }}</div>
+          </div>
+          <div class="col-md-4">
+            <div class="small text-muted">Peer Mentor</div>
+            <div class="fw-semibold">
+              {% if peer_mentor %}
+              <i class="bi bi-mortarboard text-success me-1"></i>{{ peer_mentor.mentor_name }} ({{ peer_mentor.mentor_student_id_text }})
+              {% else %}
+              <span class="text-muted">Not assigned</span>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ── Edit Batch Form ── #}
+  <div class="col-md-4">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-white py-3">
+        <h6 class="mb-0 fw-bold"><i class="bi bi-pencil-square text-warning me-2"></i>Update Batch</h6>
+      </div>
+      <div class="card-body">
+        <form method="post">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Teacher</label>
+            <select name="teacher_id" class="form-select">
+              <option value="">— Select —</option>
+              {% for t in teachers %}
+              <option value="{{ t.id }}" {% if batch.teacher_id == t.id %}selected{% endif %}>{{ t.full_name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Classroom</label>
+            <select name="classroom_id" class="form-select">
+              <option value="">— Select —</option>
+              {% for c in classrooms %}
+              <option value="{{ c.id }}" {% if batch.classroom_id == c.id %}selected{% endif %}>{{ c.room_code }} ({{ c.capacity }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Status</label>
+            <select name="status" class="form-select">
+              {% for s in ['PENDING', 'SCHEDULED', 'IN_PROGRESS', 'COMPLETED'] %}
+              <option value="{{ s }}" {% if batch.status == s %}selected{% endif %}>{{ s }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button type="submit" class="btn btn-primary w-100"><i class="bi bi-check-lg me-1"></i>Save Changes</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ── Enrolled Students ── #}
+<div class="card shadow-sm mb-4">
+  <div class="card-header bg-white py-3">
+    <h6 class="mb-0 fw-bold"><i class="bi bi-people-fill text-info me-2"></i>Enrolled Students ({{ students|length }})</h6>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-striped table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>#</th>
+            <th>Student ID</th>
+            <th>Name</th>
+            <th>Result</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in students %}
+          <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ s.student_id }}</td>
+            <td>{{ s.full_name }}</td>
+            <td>
+              {% if s.result == 'PASS' %}
+              <span class="badge bg-success">Pass</span>
+              {% elif s.result == 'FAIL' %}
+              <span class="badge bg-danger">Fail</span>
+              {% else %}
+              <span class="badge bg-secondary">—</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="4" class="text-muted text-center py-3">No students enrolled yet.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{# ── Timetable Slots ── #}
+<div class="card shadow-sm">
+  <div class="card-header bg-white py-3">
+    <h6 class="mb-0 fw-bold"><i class="bi bi-calendar3 text-success me-2"></i>Timetable Slots ({{ timetable_slots|length }})</h6>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Day</th>
+            <th>Time</th>
+            <th>Room</th>
+            <th>Teacher</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for slot in timetable_slots %}
+          <tr>
+            <td>{{ slot.day_of_week }}</td>
+            <td>{{ slot.start_time }} – {{ slot.end_time }}</td>
+            <td>{{ slot.room_code }}</td>
+            <td>{{ slot.teacher_name }}</td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="4" class="text-muted text-center py-3">No timetable slots assigned yet. Use the timetable page to schedule.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

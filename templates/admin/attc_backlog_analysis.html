@@ -1,0 +1,188 @@
+{% extends "admin/dashboard.html" %}
+{% block title %}Upload Result — Academic Support{% endblock %}
+{% block content %}
+<div class="upload-page">
+  <header class="page-heading mb-4">
+    <h2 class="mb-1">Upload Result</h2>
+    <p class="text-muted mb-0">Upload a result sheet, review the preview, then confirm the import.</p>
+  </header>
+
+  <section class="card upload-intake mb-4" aria-labelledby="upload-title">
+    <div class="card-body p-4">
+      <h3 id="upload-title" class="h5 mb-3"><i class="bi bi-cloud-arrow-up text-primary me-2" aria-hidden="true"></i>Choose result file</h3>
+      <form method="post" action="{{ url_for('admin.attc_backlog_analysis') }}" enctype="multipart/form-data" class="row g-3 align-items-end">
+        <div class="col-lg-6">
+          <label for="result-file" class="form-label fw-semibold">Result file</label>
+          <input id="result-file" type="file" name="file" class="form-control" accept=".xlsx,.xls,.xlsm,.csv" aria-describedby="result-file-help" required>
+          <div id="result-file-help" class="form-text">Excel (.xlsx, .xls, .xlsm) or CSV.</div>
+        </div>
+        <div class="col-md-7 col-lg-3">
+          <label for="upload-batch" class="form-label fw-semibold">Academic batch</label>
+          <input id="upload-batch" name="academic_batch" type="text" list="result-batches" class="form-control" placeholder="e.g. 2024-2026" value="{{ request.form.get('academic_batch', '') }}" aria-describedby="upload-batch-help">
+          <div id="upload-batch-help" class="form-text">Choose or type a batch.</div>
+        </div>
+        <div class="col-md-5 col-lg-3">
+          <button type="submit" class="btn btn-primary w-100"><i class="bi bi-upload me-1" aria-hidden="true"></i> Upload &amp; preview</button>
+        </div>
+      </form>
+      <datalist id="result-batches">
+        <option value="2024-2026"></option>
+        {% for b in academic_batches if b != '2024-2026' %}
+        <option value="{{ b }}"></option>
+        {% endfor %}
+      </datalist>
+
+      {% if preview_data %}
+      <section class="upload-preview mt-4" aria-labelledby="preview-title">
+        <div class="d-flex flex-wrap align-items-baseline gap-2 mb-3">
+          <h4 id="preview-title" class="h6 mb-0">Import preview</h4>
+          <span class="small text-muted">{{ preview_data.format }}</span>
+        </div>
+        <dl class="upload-preview-metrics mb-3">
+          <div><dt>Students found</dt><dd>{{ preview_data.students_found }}</dd></div>
+          <div><dt>Backlog entries</dt><dd>{{ preview_data.total_backlog_subjects }}</dd></div>
+          <div><dt>Warnings / skipped</dt><dd>{{ preview_data.skipped|default([])|length }}</dd></div>
+          <div><dt>Year-back excluded</dt><dd>{{ preview_data.excluded_year_back|default(0) }}</dd></div>
+        </dl>
+        {% if preview_data.skipped %}
+        <details class="upload-notes mb-3">
+          <summary class="small fw-semibold">Review import notes</summary>
+          <ul class="small mb-0 mt-2 ps-3">
+            {% for msg in preview_data.skipped %}<li>{{ msg }}</li>{% endfor %}
+          </ul>
+        </details>
+        {% endif %}
+        {% if preview_data.students_found == 0 %}
+        <p class="small text-muted mb-3">No eligible students found. Check the file and upload it again.</p>
+        {% endif %}
+        <form method="post" action="{{ url_for('admin.confirm_attc_import') }}">
+          <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" name="auto_schedule" value="1" id="confirmAutoSchedule" checked {% if preview_data.students_found == 0 %}disabled{% endif %}>
+            <label class="form-check-label small" for="confirmAutoSchedule">Create remedial batches and schedule classes (3:30–4:30 PM)</label>
+          </div>
+          <div class="d-flex flex-wrap gap-2">
+            <button type="submit" class="btn btn-primary" {% if preview_data.students_found == 0 %}disabled{% endif %}>Confirm import</button>
+            <a href="{{ url_for('admin.attc_backlog_analysis') }}" class="btn btn-outline-secondary">Cancel</a>
+          </div>
+        </form>
+      </section>
+      {% endif %}
+    </div>
+  </section>
+
+  <dl class="upload-metrics mb-4" aria-label="Current student overview">
+    <div><dt>Students analyzed</dt><dd>{{ analysis.total_students_analyzed }}</dd></div>
+    <div><dt>Need support</dt><dd>{{ analysis.total_remedial_required }}</dd></div>
+    <div><dt>With backlogs</dt><dd>{{ analysis.total_backlog_students }}</dd></div>
+  </dl>
+
+  <section class="card mb-4" aria-labelledby="support-title">
+    <div class="card-body">
+      <div class="upload-results-heading mb-3">
+        <div>
+          <h3 id="support-title" class="h5 mb-1">Students needing support</h3>
+          <p class="text-muted small mb-0">{{ total_weak_filtered }} student{{ 's' if total_weak_filtered != 1 else '' }} shown · Backlogs or attendance below {{ threshold }}%.</p>
+        </div>
+        <div class="upload-results-actions">
+          <form method="post" action="{{ url_for('admin.attc_allocate_remedial') }}">
+            <button type="submit" class="btn btn-sm btn-outline-primary" {% if analysis.total_remedial_required == 0 %}disabled{% endif %}>Allocate remedial classes</button>
+          </form>
+          <a href="{{ url_for('admin.attc_export_weak_students', threshold=threshold) }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-download me-1" aria-hidden="true"></i>Export CSV</a>
+        </div>
+      </div>
+      <form method="post" action="{{ url_for('admin.attc_set_threshold') }}" class="upload-threshold mb-3">
+        <label for="attendance-threshold" class="small fw-semibold">Minimum attendance</label>
+        <div class="input-group input-group-sm">
+          <input id="attendance-threshold" type="number" name="threshold" value="{{ threshold }}" min="0" max="100" step="0.5" class="form-control" required>
+          <span class="input-group-text">%</span>
+        </div>
+        <button type="submit" class="btn btn-sm btn-outline-secondary">Update</button>
+      </form>
+      <form method="get" action="{{ url_for('admin.attc_backlog_analysis') }}" class="row g-2 align-items-end">
+        <input type="hidden" name="threshold" value="{{ threshold }}">
+        <div class="col-md-6 col-xl-4">
+          <label for="student-search" class="form-label small">Search students</label>
+          <input id="student-search" type="search" name="q" value="{{ q }}" class="form-control" placeholder="Name or roll number">
+        </div>
+        <div class="col-md-6 col-xl-3">
+          <label for="filter-batch" class="form-label small">Academic batch</label>
+          <input id="filter-batch" type="text" name="academic_batch" list="result-batches" value="{{ filter_batch }}" class="form-control" placeholder="All batches">
+        </div>
+        <div class="col-md-6 col-xl-3">
+          <label for="filter-reason" class="form-label small">Support reason</label>
+          <select id="filter-reason" name="reason" class="form-select">
+            <option value="">All reasons</option>
+            <option value="Low Attendance" {% if filter_reason == 'Low Attendance' %}selected{% endif %}>Low attendance only</option>
+            <option value="Backlog" {% if filter_reason == 'Backlog' %}selected{% endif %}>Backlog only</option>
+            <option value="Both" {% if filter_reason == 'Both' %}selected{% endif %}>Attendance &amp; backlog</option>
+          </select>
+        </div>
+        <div class="col-md-6 col-xl-2 d-flex gap-2">
+          <button type="submit" class="btn btn-outline-primary flex-grow-1">Filter</button>
+          <a href="{{ url_for('admin.attc_backlog_analysis') }}" class="btn btn-outline-secondary">Reset</a>
+        </div>
+      </form>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 upload-results-table">
+        <thead>
+          <tr>
+            <th scope="col">Student</th>
+            <th scope="col">Roll number</th>
+            <th scope="col">Batch</th>
+            <th scope="col">Attendance</th>
+            <th scope="col">Result</th>
+            <th scope="col">Backlogs</th>
+            <th scope="col">Reason</th>
+            <th scope="col">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in weak_students %}
+          <tr>
+            <td class="fw-semibold">{{ s.student_name }}</td>
+            <td><span class="font-monospace small">{{ s.roll_number }}</span></td>
+            <td>{{ s.academic_batch or '—' }}</td>
+            <td>{{ s.attendance_percentage if s.attendance_percent is not none else '—' }}</td>
+            <td>{{ 'Fail' if s.academic_result_status == 'FAIL' or s.has_backlogs else 'Pass' }}</td>
+            <td>{{ s.total_backlogs }}</td>
+            <td>{{ s.reason_for_selection }}</td>
+            <td>{{ s.remedial_class_status }}</td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="8" class="upload-empty-state text-center">
+              {% if analysis.total_students_analyzed == 0 %}
+              <strong>No student records yet.</strong><br><span>Upload a result file above to analyze students.</span>
+              {% elif q or filter_batch or filter_reason %}
+              <strong>No students match these filters.</strong><br><span>Try another search or reset the filters.</span>
+              {% else %}
+              <strong>No students currently need support.</strong><br><span>No backlog or low-attendance records are in the current view.</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  {% if analysis.difficult_subjects %}
+  <section class="card mb-4" aria-labelledby="subjects-title">
+    <div class="card-body">
+      <h3 id="subjects-title" class="h6 mb-3">Subject failure breakdown</h3>
+      <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead><tr><th scope="col">Subject</th><th scope="col">Code</th><th scope="col">Failures</th></tr></thead>
+          <tbody>
+            {% for subject in analysis.difficult_subjects %}
+            <tr><td>{{ subject.name }}</td><td>{{ subject.code }}</td><td>{{ subject.fail_count }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

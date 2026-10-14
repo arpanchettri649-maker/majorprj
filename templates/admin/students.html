@@ -1,0 +1,245 @@
+{% extends "admin/dashboard.html" %}
+{% block title %}Students{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h2 class="fw-bold mb-0">Students</h2>
+    <p class="text-muted mb-0">Weak students identified by backlogs from other semesters OR any current-semester subject below {{ low_threshold }}%</p>
+  </div>
+  {% if weak_students %}
+  <span class="badge bg-danger fs-6">{{ weak_students|length }} weak student{{ 's' if weak_students|length != 1 else '' }}</span>
+  {% endif %}
+</div>
+
+<form method="get" class="row g-2 mb-3">
+  <div class="col-md-5">
+    <input type="text" name="q" value="{{ q }}" class="form-control" placeholder="Search by ID or name">
+  </div>
+  <div class="col-md-3">
+    <select name="academic_batch" class="form-select">
+      <option value="">All Year Batches</option>
+      {% for b in academic_batches %}
+      <option value="{{ b }}" {% if academic_batch == b %}selected{% endif %}>{{ b }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-md-2">
+    <button class="btn btn-primary w-100">Filter</button>
+  </div>
+  <div class="col-md-2">
+    <a href="{{ url_for('admin.students') }}" class="btn btn-secondary w-100">Clear</a>
+  </div>
+</form>
+
+{% if weak_students %}
+<div class="card shadow-sm mb-4 border-danger">
+  <div class="card-header bg-danger bg-opacity-10 py-3 d-flex justify-content-between align-items-center">
+    <div>
+      <h6 class="mb-0 fw-bold text-danger"><i class="bi bi-exclamation-triangle-fill me-2"></i>Weak Students (Low Attendance / Backlog Subjects)</h6>
+      <span class="small text-muted">Attendance threshold: {{ low_threshold }}%</span>
+    </div>
+    <span class="badge bg-danger">{{ weak_students|length }} student(s)</span>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0 align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>1. Student Name</th>
+            <th>2. Roll Number</th>
+            <th>3. Sem</th>
+            <th>4. Attendance %</th>
+            <th>5. Academic Result</th>
+            <th>6. Failed Subjects</th>
+            <th>7. Total Backlogs</th>
+            <th>8. Reason</th>
+            <th>9. Remedial Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in weak_students %}
+          <tr>
+            <td class="fw-semibold">{{ s.student_name }}</td>
+            <td><code>{{ s.roll_number }}</code></td>
+            <td>Sem {{ s.semester }}</td>
+            <td>
+              {% if s.attendance_percent is not none %}
+                {% if s.attendance_percent < low_threshold %}
+                <span class="badge bg-danger">{{ s.attendance_percentage }}</span>
+                {% else %}
+                <span class="badge bg-success">{{ s.attendance_percentage }}</span>
+                {% endif %}
+              {% else %}
+              <span class="badge bg-secondary">N/A</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if s.academic_result_status == 'FAIL' or s.has_backlogs %}
+              <span class="badge bg-danger">Fail</span>
+              {% else %}
+              <span class="badge bg-success">Pass</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if s.failed_subjects != '—' and s.failed_subjects %}
+              <span class="small text-danger fw-semibold">{{ s.failed_subjects }}</span>
+              {% else %}
+              <span class="text-muted small">—</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if s.total_backlogs > 0 %}
+              <span class="badge bg-danger rounded-pill">{{ s.total_backlogs }}</span>
+              {% else %}
+              <span class="badge bg-secondary rounded-pill">0</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if s.reason_for_selection == 'Both' %}
+              <span class="badge bg-danger bg-opacity-75 text-white">Both</span>
+              {% elif s.reason_for_selection == 'Low Attendance' %}
+              <span class="badge bg-warning text-dark">Low Attendance</span>
+              {% elif s.reason_for_selection == 'Backlog' %}
+              <span class="badge bg-danger">Backlog</span>
+              {% else %}
+              <span class="badge bg-secondary">—</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if 'Allocated' in s.remedial_class_status %}
+              <span class="badge bg-success">{{ s.remedial_class_status }}</span>
+              {% elif 'Eligible' in s.remedial_class_status %}
+              <span class="badge bg-warning text-dark">{{ s.remedial_class_status }}</span>
+              {% else %}
+              <span class="badge bg-secondary">{{ s.remedial_class_status }}</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% for b in academic_batches %}
+  {% set batch_students = students | selectattr('academic_batch', 'equalto', b) | list %}
+  {% if batch_students %}
+  <div class="card shadow-sm mb-4">
+    <div class="card-header bg-white py-3">
+      <h6 class="mb-0 fw-bold">Academic Batch {{ b }} <span class="badge bg-primary">{{ batch_students|length }}</span></h6>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-striped table-hover mb-0">
+          <thead class="table-light">
+            <tr>
+               <th>ID</th>
+               <th>Name</th>
+               <th>Dept</th>
+               <th>Sem</th>
+               <th>CGPA</th>
+               <th>Backlogs (Other Sem)</th>
+               <th>Attendance %</th>
+               <th>Status</th>
+             </tr>
+          </thead>
+          <tbody>
+             {% for s in batch_students %}
+             <tr>
+               <td>{{ s.student_id }}</td>
+               <td>{{ s.full_name }}</td>
+               <td>{{ s.dept_code }}</td>
+               <td>{{ s.semester }}</td>
+               <td>{% if s.cgpa %}{{ "%.2f"|format(s.cgpa) }}{% else %}—{% endif %}</td>
+               <td>{{ s.other_sem_backlogs }}</td>
+               <td>
+                 {% if s.attendance_percent is not none %}
+                   {% if s.attendance_percent < low_threshold %}
+                   <span class="badge bg-danger">{{ s.attendance_percent|round(1) }}%</span>
+                   {% else %}
+                   <span class="badge bg-success">{{ s.attendance_percent|round(1) }}%</span>
+                   {% endif %}
+                 {% else %}
+                 <span class="badge bg-secondary">N/A</span>
+                 {% endif %}
+               </td>
+               <td>
+                 {% if s.is_weak %}
+                 <span class="badge bg-danger">Weak Student</span>
+                 {% else %}
+                 <span class="badge bg-secondary">—</span>
+                 {% endif %}
+               </td>
+             </tr>
+             {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+{% endfor %}
+
+{% set unbatched = students | rejectattr('academic_batch') | list %}
+{% if unbatched %}
+<div class="card shadow-sm mb-4">
+  <div class="card-header bg-white py-3">
+    <h6 class="mb-0 fw-bold">No Academic Batch <span class="badge bg-secondary">{{ unbatched|length }}</span></h6>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-striped table-hover mb-0">
+        <thead class="table-light">
+             <tr>
+               <th>ID</th>
+               <th>Name</th>
+               <th>Dept</th>
+               <th>Sem</th>
+               <th>CGPA</th>
+               <th>Backlogs (Other Sem)</th>
+               <th>Attendance %</th>
+               <th>Status</th>
+             </tr>
+        </thead>
+        <tbody>
+             {% for s in unbatched %}
+             <tr>
+               <td>{{ s.student_id }}</td>
+               <td>{{ s.full_name }}</td>
+               <td>{{ s.dept_code }}</td>
+               <td>{{ s.semester }}</td>
+               <td>{% if s.cgpa %}{{ "%.2f"|format(s.cgpa) }}{% else %}—{% endif %}</td>
+               <td>{{ s.other_sem_backlogs }}</td>
+               <td>
+                 {% if s.attendance_percent is not none %}
+                   {% if s.attendance_percent < low_threshold %}
+                   <span class="badge bg-danger">{{ s.attendance_percent|round(1) }}%</span>
+                   {% else %}
+                   <span class="badge bg-success">{{ s.attendance_percent|round(1) }}%</span>
+                   {% endif %}
+                 {% else %}
+                 <span class="badge bg-secondary">N/A</span>
+                 {% endif %}
+               </td>
+               <td>
+                 {% if s.is_weak %}
+                 <span class="badge bg-danger">Weak Student</span>
+                 {% else %}
+                 <span class="badge bg-secondary">—</span>
+                 {% endif %}
+               </td>
+             </tr>
+             {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% if not students %}
+<div class="text-muted">No students found.</div>
+{% endif %}
+{% endblock %}

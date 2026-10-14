@@ -1,0 +1,73 @@
+{% extends "admin/dashboard.html" %}
+{% block title %}Clear Database — Academic Support{% endblock %}
+{% block content %}
+<div class="page-heading mb-4"><h2>Clear Database</h2><p class="text-muted mb-0">Secure database management for Super Admin only.</p></div>
+
+<div class="alert alert-danger border-start border-4 border-danger">
+  <h5 class="alert-heading"><i class="bi bi-exclamation-triangle-fill me-2"></i>Danger Zone</h5>
+  <p class="mb-0">This action will <strong>permanently delete</strong> all student records, teacher records, remedial batches, attendance data, and results from the database.</p>
+  <ul class="mb-0 mt-2">
+    <li>Super Admin account will be preserved</li>
+    <li>Department configuration will be preserved</li>
+    <li>System settings will be preserved</li>
+  </ul>
+</div>
+
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-body">
+    <h5 class="mb-3">Current Database Contents</h5>
+    <div class="row g-3">
+      <div class="col-md-4">
+        <div class="p-3 bg-light rounded border">
+          <div class="small text-muted fw-bold text-uppercase">Students</div>
+          <div class="fs-3 fw-bold text-primary">{{ counts.students }}</div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="p-3 bg-light rounded border">
+          <div class="small text-muted fw-bold text-uppercase">Teachers</div>
+          <div class="fs-3 fw-bold text-success">{{ counts.teachers }}</div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="p-3 bg-light rounded border">
+          <div class="small text-muted fw-bold text-uppercase">Remedial Batches</div>
+          <div class="fs-3 fw-bold text-warning">{{ counts.batches }}</div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="p-3 bg-light rounded border">
+          <div class="small text-muted fw-bold text-uppercase">Results</div>
+          <div class="fs-3 fw-bold text-danger">{{ counts.results }}</div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="p-3 bg-light rounded border">
+          <div class="small text-muted fw-bold text-uppercase">Attendance Records</div>
+          <div class="fs-3 fw-bold text-info">{{ counts.attendance }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card border-0 shadow-sm border-danger">
+  <div class="card-body">
+    <h5 class="mb-3 text-danger">Confirm Database Clearing</h5>
+    <p class="mb-3">To proceed, type <code class="bg-light px-2 py-1 rounded">DELETE ALL DATA</code> in the field below and click the confirmation button.</p>
+    <form method="post">
+      <div class="mb-3">
+        <label for="confirmation" class="form-label fw-semibold">Confirmation text</label>
+        <input type="text" id="confirmation" name="confirmation" class="form-control" placeholder="DELETE ALL DATA" required>
+        <div class="form-text">This is case-sensitive and must match exactly.</div>
+      </div>
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-danger">
+          <i class="bi bi-trash me-1"></i> Clear All Data
+        </button>
+        <a href="{{ url_for('admin.dashboard') }}" class="btn btn-outline-secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

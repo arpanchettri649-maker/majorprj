@@ -1,0 +1,52 @@
+{% extends "admin/dashboard.html" %}
+{% block title %}Remedial Batches{% endblock %}
+{% block content %}
+<h2>Remedial Batches — Computer Engineering</h2>
+<p class="text-muted">Grouped by subject, section, batch, and semester from uploaded result sheets</p>
+<div class="table-responsive mt-3">
+  <table class="table table-striped table-hover">
+    <thead class="table-dark">
+      <tr>
+        <th>Batch Code</th>
+        <th>Academic Batch</th>
+        <th>Sem</th>
+        <th>Subject</th>
+        <th>Students</th>
+        <th>Teacher</th>
+        <th>Room</th>
+        <th>Status</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for b in batches %}
+      <tr>
+        <td><span class="badge bg-secondary">{{ b.batch_code }}</span></td>
+        <td>{{ b.academic_batch or '—' }}</td>
+        <td>{{ b.semester }}</td>
+        <td>{{ b.subject_name }}</td>
+        <td>{{ b.student_count }}</td>
+        <td>{{ b.teacher_name or '—' }}</td>
+        <td>{{ b.room_code or '—' }}</td>
+        <td>
+          {% if b.status == 'PENDING' %}
+          <span class="badge bg-warning text-dark">{{ b.status }}</span>
+          {% elif b.status == 'SCHEDULED' %}
+          <span class="badge bg-success">{{ b.status }}</span>
+          {% else %}
+          <span class="badge bg-secondary">{{ b.status }}</span>
+          {% endif %}
+        </td>
+        <td>
+          <a href="{{ url_for('admin.batch_detail', batch_id=b.id) }}" class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-eye me-1"></i>View
+          </a>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="9" class="text-muted text-center py-4">No batches yet. Upload results first.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

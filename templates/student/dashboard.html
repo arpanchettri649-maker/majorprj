@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% block title %}Student Portal{% endblock %}
+{% block sidebar %}
+<ul class="nav flex-column gap-2">
+  <li><a href="{{ url_for('student.dashboard') }}" class="text-white"><i class="bi bi-house me-1"></i> Dashboard</a></li>
+  <li><a href="{{ url_for('student.attendance_dashboard') }}" class="text-white"><i class="bi bi-bar-chart me-1"></i> Attendance</a></li>
+  <li><a href="{{ url_for('student.routine') }}" class="text-white"><i class="bi bi-calendar3 me-1"></i> Routine</a></li>
+  <li><a href="{{ url_for('student.extra_classes') }}" class="text-white"><i class="bi bi-clock-history me-1"></i> Extra Classes</a></li>
+</ul>
+{% endblock %}
+{% block content %}
+{% if is_weak %}
+<div class="alert alert-danger d-flex align-items-center mb-3" role="alert">
+  <i class="bi bi-exclamation-triangle-fill me-2 fs-5"></i>
+  <div>
+    <strong>Attention:</strong> You have been identified as needing additional support.
+    {% for reason in weakness_reasons %}<br>• {{ reason }}{% endfor %}
+    <br>Please attend remedial and extra classes regularly.
+  </div>
+</div>
+{% endif %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h2 class="fw-bold mb-0">Welcome, {{ student.full_name }}</h2>
+    <p class="text-muted mb-0">Roll {{ student.student_id }} · Semester {{ student.semester }} · Section {{ student.section }}{% if student.cgpa %} · CGPA: {{ "%.2f"|format(student.cgpa) }}{% endif %}</p>
+  </div>
+  <a href="{{ url_for('student.attendance_dashboard') }}" class="btn btn-outline-primary">Open Attendance Dashboard</a>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-4">
+    <div class="card shadow-sm stat-card h-100">
+      <div class="card-body">
+        <div class="text-muted small">Failed Subjects</div>
+        <h3 class="fw-bold mb-0">{{ failures|length }}</h3>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <div class="text-muted small">Overall Attendance</div>
+        <h3 class="fw-bold mb-0">{{ overall_attendance }}%</h3>
+        <div class="small text-muted">{{ present_count }} present / {{ total_classes }} classes</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <div class="text-muted small">Routine Classes</div>
+        <h3 class="fw-bold mb-0">{{ schedule|length }}</h3>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if peer_mentor %}
+<div class="card shadow-sm mb-4 border-info">
+  <div class="card-header bg-info bg-opacity-10 py-3">
+    <h6 class="mb-0 fw-bold text-info"><i class="bi bi-person-check-fill me-2"></i>Your Peer Mentor</h6>
+  </div>
+  <div class="card-body">
+    <p class="mb-1"><strong>{{ peer_mentor.mentor_name }}</strong> ({{ peer_mentor.mentor_id }})</p>
+    <p class="text-muted mb-0 small">{{ peer_mentor.subject_name }} — {{ peer_mentor.batch_code }}</p>
+  </div>
+</div>
+{% endif %}
+
+<div class="card shadow-sm mb-4">
+  <div class="card-header bg-white d-flex justify-content-between align-items-center">
+    <h6 class="mb-0 fw-bold"><i class="bi bi-bar-chart-fill text-primary me-2"></i>Attendance by Subject</h6>
+    <a href="{{ url_for('student.attendance_dashboard') }}" class="small">View full dashboard</a>
+  </div>
+  <div class="card-body">
+    {% if attendance_summary %}
+    <canvas id="attendanceBarChart" height="110"></canvas>
+    {% else %}
+    <p class="text-muted mb-0">No attendance records yet.</p>
+    {% endif %}
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-md-6">
+    <div class="card h-100">
+      <div class="card-header">Failed Subjects ({{ failures|length }})</div>
+      <ul class="list-group list-group-flush">
+        {% for f in failures %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          <span>{{ f.subject_name }} <small class="text-muted">({{ f.subject_code }})</small></span>
+          <span class="badge bg-danger">Fail</span>
+        </li>
+        {% else %}
+        <li class="list-group-item text-muted">No failures recorded.</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card h-100">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span>Remedial Routine</span>
+        <a href="{{ url_for('student.routine') }}" class="small">Open routine</a>
+      </div>
+      <ul class="list-group list-group-flush">
+        {% for s in schedule %}
+        <li class="list-group-item">{{ s.subject_name }} · {{ s.day_of_week }} {{ s.start_time }}-{{ s.end_time }} · {{ s.room_code }}</li>
+        {% else %}
+        <li class="list-group-item text-muted">No remedial classes scheduled.</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card"><div class="card-header">Give Feedback</div>
+      <div class="card-body">
+        {% for fb in feedback_batches %}
+        <form method="post" action="{{ url_for('student.submit_feedback', batch_id=fb.id) }}" class="border rounded p-3 mb-3">
+          <strong>{{ fb.subject_name }}</strong> ({{ fb.batch_code }})
+          <div class="mt-2">
+            <label>Rating (1-5)</label>
+            <select name="rating" class="form-select form-select-sm" required>
+              {% for i in range(1,6) %}<option value="{{ i }}" {% if fb.rating == i %}selected{% endif %}>{{ i }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="mt-2">
+            <textarea name="comments" class="form-control form-control-sm" placeholder="Comments">{{ fb.comments or '' }}</textarea>
+          </div>
+          <button class="btn btn-sm btn-primary mt-2">Submit Feedback</button>
+        </form>
+        {% else %}
+        <p class="text-muted">Enroll in remedial batches to give feedback.</p>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+{% if attendance_summary %}
+<script>
+const labels = {{ attendance_summary | map(attribute='subject_name') | list | tojson }};
+const percents = {{ attendance_summary | map(attribute='percent') | list | tojson }};
+new Chart(document.getElementById('attendanceBarChart'), {
+  type: 'bar',
+  data: {
+    labels,
+    datasets: [{
+      label: 'Attendance %',
+      data: percents,
+      backgroundColor: '#0d6efd'
+    }]
+  },
+  options: {
+    responsive: true,
+    scales: { y: { beginAtZero: true, max: 100 } }
+  }
+});
+</script>
+{% endif %}
+{% endblock %}

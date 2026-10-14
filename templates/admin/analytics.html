@@ -1,0 +1,17 @@
+{% extends "admin/dashboard.html" %}
+{% block title %}Analytics{% endblock %}
+{% block content %}
+<h2>Analytics</h2>
+<div class="row g-3 mt-2">
+  <div class="col-md-4"><div class="card p-3"><h6>Total Failures</h6><h3>{{ analytics.total_failures }}</h3></div></div>
+  <div class="col-md-4"><div class="card p-3"><h6>Pending Batches</h6><h3>{{ analytics.pending_batches }}</h3></div></div>
+</div>
+<h5 class="mt-4">Most Difficult Subjects</h5>
+<ul class="list-group">
+  {% for s in analytics.difficult_subjects %}
+  <li class="list-group-item d-flex justify-content-between"><span>{{ s.name }}</span><span class="badge bg-danger">{{ s.fail_count }} failures</span></li>
+  {% else %}
+  <li class="list-group-item text-muted">No failure data yet.</li>
+  {% endfor %}
+</ul>
+{% endblock %}

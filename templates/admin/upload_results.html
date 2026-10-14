@@ -1,0 +1,135 @@
+{% extends "admin/dashboard.html" %}
+{% block title %}Upload Results{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h2 class="fw-bold mb-0">Upload Exam Results</h2>
+    <p class="text-muted mb-0">Computer Engineering only — failures extracted from <strong>PASS / FAIL</strong> in the result sheet (not marks)</p>
+  </div>
+  <a href="{{ url_for('admin.batches') }}" class="btn btn-outline-secondary"><i class="bi bi-collection me-1"></i> View Batches</a>
+</div>
+
+<div class="row g-4">
+  <div class="col-md-7">
+    <form method="post" enctype="multipart/form-data" class="card shadow-sm p-4">
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Academic Batch <span class="text-danger">*</span></label>
+        <select name="academic_batch" class="form-select" required>
+          <option value="">Select batch…</option>
+          {% for b in academic_batches %}
+          <option value="{{ b }}" {% if summary and summary.academic_batch == b %}selected{% endif %}>{{ b }}</option>
+          {% endfor %}
+        </select>
+        <div class="form-text">Each upload must belong to one batch only — batches are never mixed.</div>
+      </div>
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Semester <span class="text-danger">*</span></label>
+        <select name="semester" class="form-select" required>
+          <option value="">Select semester…</option>
+          {% for s in semesters %}
+          <option value="{{ s }}" {% if summary and summary.semester == s %}selected{% endif %}>Semester {{ s }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Select Result File (.xlsx or .csv) <span class="text-danger">*</span></label>
+        <input type="file" name="file" class="form-control" accept=".xlsx,.csv" required>
+        <div class="form-text">Supports polytechnic master sheets and standard CSV with a Result column.</div>
+      </div>
+      <div class="mb-3 form-check form-switch bg-light p-3 rounded border">
+        <input class="form-check-input ms-0 me-2" type="checkbox" name="auto_schedule" value="1" id="autoScheduleCheck" checked>
+        <label class="form-check-label fw-semibold" for="autoScheduleCheck">
+          <i class="bi bi-magic text-success me-1"></i> Automatically generate timetable schedule
+        </label>
+        <div class="small text-muted ms-4">Assigns mentors, rooms, and clash-free time slots immediately after upload.</div>
+      </div>
+      <button type="submit" class="btn btn-primary btn-lg w-100 mt-2">
+        <i class="bi bi-cloud-arrow-up me-2"></i> Upload & Process Results
+      </button>
+    </form>
+  </div>
+
+  <div class="col-md-5">
+    <div class="card shadow-sm border-0 bg-light p-3">
+      <h6 class="fw-bold text-primary mb-3"><i class="bi bi-info-circle-fill me-1"></i> Format & Evaluation Rules</h6>
+      <ul class="list-group list-group-flush bg-transparent small">
+        <li class="list-group-item bg-transparent px-0">
+          <strong>Pass/Fail Criterion:</strong> Failures are determined from the <strong>Result column (PASS / FAIL)</strong> — never calculated from marks.
+        </li>
+        <li class="list-group-item bg-transparent px-0">
+          <strong>Batch & Semester:</strong> Select the batch (2024-2027, 2025-2028, 2026-2029) and semester (1–6) before uploading. All records are stored under that selection.
+        </li>
+        <li class="list-group-item bg-transparent px-0">
+          <strong>No Mixing:</strong> Students from a different batch (detected from enrollment) are skipped automatically.
+        </li>
+        <li class="list-group-item bg-transparent px-0">
+          <strong>Department:</strong> Only Computer Engineering (CO) records are imported.
+        </li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+{% if summary %}
+<div class="card shadow-sm mt-4 border-success">
+  <div class="card-header bg-success text-white py-3">
+    <h5 class="mb-0 fw-bold"><i class="bi bi-check-circle-fill me-2"></i> Upload & Batching Summary</h5>
+  </div>
+  <div class="card-body">
+    <div class="alert alert-light border mb-3">
+      <strong>Batch:</strong> {{ summary.academic_batch }} &nbsp;|&nbsp;
+      <strong>Semester:</strong> {{ summary.semester }}
+    </div>
+    <div class="row g-3">
+      <div class="col-md-3">
+        <div class="p-3 bg-light rounded text-center">
+          <div class="small text-muted">Total Records Imported</div>
+          <h3 class="fw-bold mb-0 text-primary">{{ summary.inserted }}</h3>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="p-3 bg-light rounded text-center">
+          <div class="small text-muted">Failures Detected (FAIL in sheet)</div>
+          <h3 class="fw-bold mb-0 text-danger">{{ summary.failures_found }}</h3>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="p-3 bg-light rounded text-center">
+          <div class="small text-muted">Remedial Batches Created</div>
+          <h3 class="fw-bold mb-0 text-dark">{{ summary.batches_created }}</h3>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="p-3 bg-light rounded text-center">
+          <div class="small text-muted">Slots Scheduled</div>
+          <h3 class="fw-bold mb-0 text-success">{{ summary.scheduled_count }}</h3>
+        </div>
+      </div>
+    </div>
+
+    {% if summary.institution or summary.exam_title %}
+    <div class="mt-3 small text-muted">
+      {% if summary.institution %}<strong>Institution:</strong> {{ summary.institution }} | {% endif %}
+      {% if summary.exam_title %}<strong>Exam:</strong> {{ summary.exam_title }} | {% endif %}
+      <strong>Students:</strong> {{ summary.students_found }} | <strong>Subjects:</strong> {{ summary.subjects_found }}
+    </div>
+    {% endif %}
+
+    {% if summary.skipped %}
+    <div class="mt-3">
+      <h6 class="text-warning fw-bold">Skipped / Notice Logs:</h6>
+      <ul class="text-muted small mb-0">
+        {% for msg in summary.skipped[:10] %}<li>{{ msg }}</li>{% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    <div class="mt-3 pt-3 border-top d-flex gap-2 flex-wrap">
+      <a href="{{ url_for('admin.failure_list', academic_batch=summary.academic_batch, semester=summary.semester) }}" class="btn btn-sm btn-outline-danger"><i class="bi bi-exclamation-triangle me-1"></i> View Failure List</a>
+      <a href="{{ url_for('admin.timetable') }}" class="btn btn-sm btn-primary"><i class="bi bi-calendar3 me-1"></i> View Routine Timetable</a>
+      <a href="{{ url_for('admin.batches') }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-collection me-1"></i> View Batches</a>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

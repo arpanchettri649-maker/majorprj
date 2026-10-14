@@ -1,0 +1,107 @@
+{% extends "admin/dashboard.html" %}
+{% block title %}Attendance Import Preview — Academic Support{% endblock %}
+{% block content %}
+<div class="page-heading mb-4">
+  <h2 class="mb-1">Attendance Import Preview</h2>
+  <p class="text-muted mb-0">Review the parsed attendance data before confirming import.</p>
+</div>
+
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-body">
+    <h5 class="mb-3">Import Summary</h5>
+    <div class="row g-3">
+      <div class="col-md-3">
+        <div class="p-3 bg-light rounded border">
+          <div class="small text-muted fw-bold text-uppercase">Students Found</div>
+          <div class="fs-4 fw-bold text-primary">{{ parsed.students_found }}</div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="p-3 bg-light rounded border">
+          <div class="small text-muted fw-bold text-uppercase">Subjects Found</div>
+          <div class="fs-4 fw-bold text-success">{{ parsed.subjects_found }}</div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="p-3 bg-light rounded border">
+          <div class="small text-muted fw-bold text-uppercase">Semester</div>
+          <div class="fs-4 fw-bold text-info">{{ parsed.semester }}</div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="p-3 bg-light rounded border">
+          <div class="small text-muted fw-bold text-uppercase">Academic Batch</div>
+          <div class="fs-4 fw-bold text-warning">{{ parsed.academic_batch or 'Auto-detected' }}</div>
+        </div>
+      </div>
+    </div>
+    
+    {% if parsed.skipped %}
+    <details class="mt-3">
+      <summary class="small fw-semibold">Warnings ({{ parsed.skipped|length }})</summary>
+      <ul class="small mb-0 mt-2 ps-3">
+        {% for msg in parsed.skipped %}<li>{{ msg }}</li>{% endfor %}
+      </ul>
+    </details>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-body">
+    <h5 class="mb-3">Sample Records (First 10)</h5>
+    <div class="table-responsive">
+      <table class="table table-sm table-hover">
+        <thead>
+          <tr>
+            <th>Student ID</th>
+            <th>Student Name</th>
+            <th>Subject</th>
+            <th>Attendance</th>
+            <th>Classes</th>
+            <th>Percentage</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for rec in sample_records %}
+          <tr>
+            <td class="font-monospace">{{ rec.student_id }}</td>
+            <td>{{ rec.student_name }}</td>
+            <td>{{ rec.subject }}</td>
+            <td>{{ rec.classes_attended }}/{{ rec.total_classes }}</td>
+            <td>{{ rec.total_classes }}</td>
+            <td>
+              <span class="badge {% if rec.attendance_percent < low_threshold %}bg-danger{% else %}bg-success{% endif %}">
+                {{ rec.attendance_percent }}%
+              </span>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="card border-0 shadow-sm">
+  <div class="card-body">
+    <h5 class="mb-3">Confirm Import</h5>
+    <p class="text-muted mb-3">
+      After confirmation, the system will:
+    </p>
+    <ul class="text-muted mb-3">
+      <li>Import all attendance records to the database</li>
+      <li>Automatically identify students below {{ low_threshold }}% attendance</li>
+      <li>Add eligible students to the remedial workflow</li>
+    </ul>
+    <form method="post">
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-check-circle me-1"></i> Confirm Import
+        </button>
+        <a href="{{ url_for('admin.semester_attendance') }}" class="btn btn-outline-secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
