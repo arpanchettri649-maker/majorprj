@@ -1,5 +1,6 @@
 from datetime import timedelta
 from flask import Flask, render_template, session
+from werkzeug.middleware.proxy_fix import ProxyFix
 from dotenv import load_dotenv
 from pathlib import Path
 
@@ -18,6 +19,9 @@ def create_app():
     app = Flask(__name__, static_folder='static', static_url_path='/static')
     app.config["SECRET_KEY"] = "major-project-1c-remedial-secret-key"
     app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
+
+    # Fix URL generation behind Render's proxy (HTTPS, correct host)
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)
 
     # Session configuration to prevent session expiration during file uploads
     app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=24)

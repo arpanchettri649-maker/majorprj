@@ -22,7 +22,51 @@ def init_db():
     with get_db() as conn:
         conn.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
         _migrate(conn)
+        _seed_initial_data(conn)
         conn.commit()
+
+
+def _seed_initial_data(conn):
+    """Seed essential initial data (departments, super admin) if database is empty.
+    This ensures the app works on ephemeral filesystems like Render's free tier.
+    """
+    # Check if departments already exist
+    dept_count = conn.execute("SELECT COUNT(*) AS c FROM departments").fetchone()["c"]
+    if dept_count > 0:
+        return  # Already seeded
+
+    # Seed departments
+    departments = [
+        ("CO", "Computer Engineering"),
+        ("ME", "Mechanical Engineering"),
+        ("MT", "Mechatronics"),
+        ("CE", "Civil Engineering"),
+        ("MC", "Medical Laboratory Technology"),
+    ]
+    for code, name in departments:
+        conn.execute(
+            "INSERT INTO departments (code, name) VALUES (?, ?)", (code, name)
+        )
+
+    # Get department ID map
+    dept_map = {
+        row["code"]: row["id"]
+        for row in conn.execute("SELECT id, code FROM departments").fetchall()
+    }
+
+    # Seed super admin (only if no users exist at all)
+    user_count = conn.execute("SELECT COUNT(*) AS c FROM users").fetchone()["c"]
+    if user_count == 0:
+        conn.execute(
+            """
+            INSERT INTO users (username, password_hash, role, full_name)
+            VALUES (?, ?, 'super_admin', 'Super Administrator')
+            """,
+            ("superadmin", generate_password_hash("admin123")),
+        )
+        print("INFO: Seeded initial departments and super admin (superadmin/admin123)")
+    else:
+        print("INFO: Seeded initial departments (users already exist)")
 
 
 def _add_column_if_missing(conn, table, column, definition):

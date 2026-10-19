@@ -13,4 +13,8 @@ services:
         sync: false
       - key: PORT
         value: 10000
+    disk:
+      name: remedial-data
+      mountPath: /opt/render/project/src/instance
+      sizeGB: 1
 
