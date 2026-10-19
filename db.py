@@ -143,6 +143,9 @@ def _migrate(conn):
     _add_column_if_missing(conn, "students", "academic_batch", "TEXT")
     _add_column_if_missing(conn, "students", "registration_status", "TEXT DEFAULT 'APPROVED'")
     _add_column_if_missing(conn, "students", "cgpa", "REAL")
+    _add_column_if_missing(conn, "students", "email", "TEXT")
+    _add_column_if_missing(conn, "teachers", "email", "TEXT")
+    _add_column_if_missing(conn, "users", "email", "TEXT")
     _add_column_if_missing(conn, "results", "academic_batch", "TEXT")
     _add_column_if_missing(conn, "remedial_batches", "academic_batch", "TEXT")
     conn.execute(
@@ -155,6 +158,33 @@ def _migrate(conn):
             status TEXT NOT NULL CHECK(status IN ('PRESENT', 'ABSENT')),
             marked_by INTEGER REFERENCES users(id),
             UNIQUE(batch_id, student_id, attendance_date)
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS extra_class_attendance (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            batch_id INTEGER NOT NULL REFERENCES remedial_batches(id) ON DELETE CASCADE,
+            student_id INTEGER NOT NULL REFERENCES students(id),
+            attendance_date TEXT NOT NULL,
+            status TEXT NOT NULL CHECK(status IN ('PRESENT', 'ABSENT')),
+            marked_by INTEGER REFERENCES users(id),
+            remarks TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(batch_id, student_id, attendance_date)
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS password_reset_tokens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            token TEXT NOT NULL UNIQUE,
+            expires_at TEXT NOT NULL,
+            used_at TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
         )
         """
     )

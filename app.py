@@ -1,9 +1,17 @@
 from datetime import timedelta
 from flask import Flask, render_template, session
+from dotenv import load_dotenv
+from pathlib import Path
 
 from auth import get_current_user
 from db import get_db, init_db
 from routes import admin_bp, auth_bp, student_bp, teacher_bp
+
+# Load environment variables from .env file ONLY if it exists (for local development)
+# This allows using Windows User Environment Variables or Render env vars without requiring .env
+env_path = Path(__file__).resolve().parent / ".env"
+if env_path.exists():
+    load_dotenv(dotenv_path=env_path)
 
 
 def create_app():
@@ -52,4 +60,6 @@ def create_app():
 app = create_app()
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    import os
+    port = int(os.environ.get("PORT", 5000))
+    app.run(debug=True, host="0.0.0.0", port=port)

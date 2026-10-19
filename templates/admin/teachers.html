@@ -8,6 +8,7 @@
       <h5>Add Teacher</h5>
       <div class="mb-2"><input name="employee_id" class="form-control" placeholder="Employee ID" required></div>
       <div class="mb-2"><input name="full_name" class="form-control" placeholder="Full Name" required></div>
+      <div class="mb-2"><input name="email" type="email" class="form-control" placeholder="Email (for password reset)"></div>
       {% if user.role == 'super_admin' %}
       <div class="mb-2">
         <select name="department_id" class="form-select" required>

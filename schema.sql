@@ -14,7 +14,8 @@ CREATE TABLE IF NOT EXISTS users (
     full_name TEXT NOT NULL,
     department_id INTEGER REFERENCES departments(id),
     is_active INTEGER NOT NULL DEFAULT 1,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    email TEXT
 );
 
 CREATE TABLE IF NOT EXISTS subjects (
@@ -34,7 +35,8 @@ CREATE TABLE IF NOT EXISTS students (
     academic_batch TEXT,
     registration_status TEXT NOT NULL DEFAULT 'APPROVED',
     user_id INTEGER REFERENCES users(id),
-    cgpa REAL
+    cgpa REAL,
+    email TEXT
 );
 
 CREATE TABLE IF NOT EXISTS teachers (
@@ -42,7 +44,8 @@ CREATE TABLE IF NOT EXISTS teachers (
     employee_id TEXT NOT NULL UNIQUE,
     full_name TEXT NOT NULL,
     department_id INTEGER NOT NULL REFERENCES departments(id),
-    user_id INTEGER REFERENCES users(id)
+    user_id INTEGER REFERENCES users(id),
+    email TEXT
 );
 
 CREATE TABLE IF NOT EXISTS classrooms (
@@ -169,6 +172,19 @@ CREATE TABLE IF NOT EXISTS extra_class_requests (
     UNIQUE(student_id, subject_id, batch_id)
 );
 
+-- Extra class attendance checklist (daily attendance for extra/remedial classes)
+CREATE TABLE IF NOT EXISTS extra_class_attendance (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    batch_id INTEGER NOT NULL REFERENCES remedial_batches(id) ON DELETE CASCADE,
+    student_id INTEGER NOT NULL REFERENCES students(id),
+    attendance_date TEXT NOT NULL,
+    status TEXT NOT NULL CHECK(status IN ('PRESENT', 'ABSENT')),
+    marked_by INTEGER REFERENCES users(id),
+    remarks TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(batch_id, student_id, attendance_date)
+);
+
 -- Peer mentor assignments (topper student assigned to help a remedial batch)
 CREATE TABLE IF NOT EXISTS peer_mentors (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -199,4 +215,26 @@ CREATE TABLE IF NOT EXISTS system_settings (
     value TEXT NOT NULL,
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- Failed login attempt log for authorized administrator review
+CREATE TABLE IF NOT EXISTS failed_logins (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL,
+    ip_address TEXT,
+    user_agent TEXT,
+    attempted_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_failed_logins_attempted_at ON failed_logins(attempted_at DESC);
+
+-- Password reset tokens for secure password recovery
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    token TEXT NOT NULL UNIQUE,
+    expires_at TEXT NOT NULL,
+    used_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_token ON password_reset_tokens(token);
+CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_expires ON password_reset_tokens(expires_at);
 

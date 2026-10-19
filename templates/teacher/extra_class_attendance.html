@@ -1,0 +1,109 @@
+{% extends "teacher/dashboard.html" %}
+{% block title %}Extra Class Attendance — {{ batch.batch_code }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h2 class="fw-bold mb-0"><i class="bi bi-calendar-check text-primary me-2"></i>Extra Class Attendance — {{ batch.batch_code }}</h2>
+    <p class="text-muted mb-0"><strong>Subject:</strong> {{ batch.subject_name }} ({{ batch.subject_code }}) · <strong>Room:</strong> {{ batch.room_code or 'TBD' }}</p>
+  </div>
+  <a href="{{ url_for('teacher.dashboard') }}" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i> Back to Dashboard
+  </a>
+</div>
+
+<div class="card shadow-sm mb-4">
+  <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+    <h6 class="mb-0 fw-bold"><i class="bi bi-clock me-1"></i> Class Date Selection</h6>
+    <form method="get" class="d-flex align-items-center gap-2">
+      <label class="form-label mb-0 small fw-semibold text-muted">Attendance Date:</label>
+      <input type="date" name="date" value="{{ attendance_date }}" class="form-control form-control-sm" onchange="this.form.submit()" style="max-width: 180px;">
+    </form>
+  </div>
+  <div class="card-body">
+    {% if students %}
+    <form method="post">
+      <input type="hidden" name="attendance_date" value="{{ attendance_date }}">
+      
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <div class="small text-muted">Enrolled Students: <strong>{{ students|length }}</strong></div>
+        <div class="btn-group btn-group-sm">
+          <button type="button" class="btn btn-outline-success" onclick="markAll('PRESENT')"><i class="bi bi-check-all me-1"></i> Mark All Present</button>
+          <button type="button" class="btn btn-outline-danger" onclick="markAll('ABSENT')"><i class="bi bi-x-lg me-1"></i> Mark All Absent</button>
+        </div>
+      </div>
+
+      <div class="table-responsive mb-4">
+        <table class="table table-hover align-middle border">
+          <thead class="table-light">
+            <tr>
+              <th style="width: 50px;">#</th>
+              <th>Roll Number</th>
+              <th>Student Name</th>
+              <th style="width: 140px;" class="text-center">Status on {{ attendance_date }}</th>
+              <th style="width: 220px;" class="text-center">Mark Attendance</th>
+              <th style="width: 200px;">Remarks</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for s in students %}
+            {% set current_att = attendance_map.get(s.id) %}
+            <tr>
+              <td>{{ loop.index }}</td>
+              <td><span class="font-monospace fw-bold">{{ s.student_id }}</span></td>
+              <td class="fw-semibold">{{ s.full_name }}</td>
+              <td class="text-center">
+                {% if current_att and current_att.status == 'PRESENT' %}
+                <span class="badge bg-success">Present</span>
+                {% elif current_att and current_att.status == 'ABSENT' %}
+                <span class="badge bg-danger">Absent</span>
+                {% else %}
+                <span class="badge bg-secondary">Not Marked</span>
+                {% endif %}
+              </td>
+              <td>
+                <div class="d-flex justify-content-center gap-3">
+                  <div class="form-check">
+                    <input class="form-check-input att-present" type="radio" name="att_{{ s.id }}" id="pres_{{ s.id }}" value="PRESENT" {% if current_att and current_att.status == 'PRESENT' %}checked{% endif %}>
+                    <label class="form-check-label text-success fw-semibold" for="pres_{{ s.id }}">Present</label>
+                  </div>
+                  <div class="form-check">
+                    <input class="form-check-input att-absent" type="radio" name="att_{{ s.id }}" id="abs_{{ s.id }}" value="ABSENT" {% if not current_att or current_att.status == 'ABSENT' %}checked{% endif %}>
+                    <label class="form-check-label text-danger fw-semibold" for="abs_{{ s.id }}">Absent</label>
+                  </div>
+                </div>
+              </td>
+              <td>
+                <input type="text" name="remarks_{{ s.id }}" class="form-control form-control-sm" placeholder="Optional remarks" value="{{ current_att.remarks if current_att else '' }}">
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="d-flex justify-content-end gap-2">
+        <button type="submit" class="btn btn-primary btn-lg px-4 shadow-sm">
+          <i class="bi bi-save2-fill me-2"></i> Save Extra Class Attendance
+        </button>
+      </div>
+    </form>
+    {% else %}
+    <div class="text-center py-5 text-muted">
+      <i class="bi bi-people display-4 d-block mb-3"></i>
+      <h5>No students enrolled in this remedial batch yet.</h5>
+      <p class="small">Students will be allocated automatically from ATTC Backlog Analysis.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+function markAll(status) {
+  if (status === 'PRESENT') {
+    document.querySelectorAll('.att-present').forEach(el => el.checked = true);
+  } else if (status === 'ABSENT') {
+    document.querySelectorAll('.att-absent').forEach(el => el.checked = true);
+  }
+}
+</script>
+{% endblock %}

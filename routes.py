@@ -28,7 +28,20 @@ from academic import (
     is_computer_department,
     scope_upload_records,
 )
-from auth import get_current_user, hash_password, login_required, login_status, login_user
+from auth import (
+    get_current_user,
+    hash_password,
+    login_required,
+    login_status,
+    login_user,
+    record_failed_login,
+    get_failed_logins,
+    generate_reset_token,
+    validate_reset_token,
+    mark_token_used,
+    cleanup_expired_tokens,
+    send_email,
+)
 from db import add_notification, get_db, get_setting, log_audit, set_setting
 from excel_parser import (
     exclude_year_back_students,
@@ -158,10 +171,20 @@ def _import_result_records(conn, records, dept_id_filter=None):
 
         subject_name = rec["subject"]
         subject_code = rec.get("subject_code") or subject_name[:12].upper().replace(" ", "")
+        
+        # Use exact matching only - no partial matches to prevent theory/lab confusion
         subject = conn.execute(
-            "SELECT id FROM subjects WHERE code = ? OR name = ?",
-            (subject_code, subject_name),
+            "SELECT id FROM subjects WHERE UPPER(name) = UPPER(?)",
+            (subject_name,),
         ).fetchone()
+        
+        # If no exact name match, try exact code match
+        if not subject:
+            subject = conn.execute(
+                "SELECT id FROM subjects WHERE UPPER(code) = UPPER(?)",
+                (subject_code,),
+            ).fetchone()
+        
         if not subject:
             cur = conn.execute(
                 "INSERT INTO subjects (code, name, department_id) VALUES (?, ?, ?)",
@@ -245,14 +268,32 @@ def _import_result_records(conn, records, dept_id_filter=None):
 
 
 def _get_or_create_subject(conn, name, code, department_id):
+    """
+    Get or create a subject using EXACT matching only.
+    Prevents incorrect matches between theory and lab subjects.
+    Example: "Data structure in C" should NOT match "Data structure lab"
+    """
     name = (name or "").strip() or "Overall"
     code = (code or "").strip() or name[:12].upper().replace(" ", "")
+    
+    # 1. Try exact name match (case-insensitive) - this is the primary check
     subject = conn.execute(
-        "SELECT id FROM subjects WHERE UPPER(code) = UPPER(?) OR UPPER(name) = UPPER(?)",
-        (code, name),
+        "SELECT id FROM subjects WHERE UPPER(name) = UPPER(?)",
+        (name,),
     ).fetchone()
     if subject:
         return subject["id"]
+    
+    # 2. Try exact code match (case-insensitive) - secondary check
+    subject = conn.execute(
+        "SELECT id FROM subjects WHERE UPPER(code) = UPPER(?)",
+        (code,),
+    ).fetchone()
+    if subject:
+        return subject["id"]
+    
+    # 3. No exact match found - create new subject
+    # We do NOT use partial/LIKE matching to prevent incorrect matches
     cur = conn.execute(
         "INSERT INTO subjects (code, name, department_id) VALUES (?, ?, ?)",
         (code, name, department_id),
@@ -292,6 +333,7 @@ def login():
             flash("Your registration was rejected. Please contact the department admin.", "danger")
             return render_template("login.html")
         if status != "ok" or not user:
+            record_failed_login(username, request.remote_addr, request.headers.get("User-Agent"))
             flash("Invalid username or password.", "danger")
             return render_template("login.html")
         session["user_id"] = user["id"]
@@ -310,18 +352,24 @@ def register():
     form = {
         "roll_number": "",
         "full_name": "",
+        "email": "",
         "semester": "1",
         "section": "A",
+        "department_id": "",
     }
     if request.method != "POST":
-        return render_template("register.html", form=form, semesters=SEMESTERS)
+        with get_db() as conn:
+            departments = conn.execute("SELECT id, code, name FROM departments ORDER BY name").fetchall()
+        return render_template("register.html", form=form, semesters=SEMESTERS, departments=departments)
 
     roll = request.form.get("roll_number", "").strip().upper()
     full_name = request.form.get("full_name", "").strip()
+    email = request.form.get("email", "").strip()
     password = request.form.get("password", "")
     confirm = request.form.get("confirm_password", "")
     section = (request.form.get("section", "A") or "A").strip().upper()[:5] or "A"
-    form.update({"roll_number": roll, "full_name": full_name, "section": section})
+    department_id = request.form.get("department_id", type=int)
+    form.update({"roll_number": roll, "full_name": full_name, "email": email, "section": section, "department_id": department_id or ""})
 
     try:
         semester = int(request.form.get("semester", 1))
@@ -331,16 +379,39 @@ def register():
 
     if not roll or not full_name:
         flash("Roll number and full name are required.", "danger")
-        return render_template("register.html", form=form, semesters=SEMESTERS)
+        with get_db() as conn:
+            departments = conn.execute("SELECT id, code, name FROM departments ORDER BY name").fetchall()
+        return render_template("register.html", form=form, semesters=SEMESTERS, departments=departments)
+    if not email:
+        flash("Email address is required.", "danger")
+        with get_db() as conn:
+            departments = conn.execute("SELECT id, code, name FROM departments ORDER BY name").fetchall()
+        return render_template("register.html", form=form, semesters=SEMESTERS, departments=departments)
+    if "@" not in email or "." not in email:
+        flash("Please enter a valid email address.", "danger")
+        with get_db() as conn:
+            departments = conn.execute("SELECT id, code, name FROM departments ORDER BY name").fetchall()
+        return render_template("register.html", form=form, semesters=SEMESTERS, departments=departments)
     if len(password) < 4:
         flash("Password must be at least 4 characters.", "danger")
-        return render_template("register.html", form=form, semesters=SEMESTERS)
+        with get_db() as conn:
+            departments = conn.execute("SELECT id, code, name FROM departments ORDER BY name").fetchall()
+        return render_template("register.html", form=form, semesters=SEMESTERS, departments=departments)
     if password != confirm:
         flash("Passwords do not match.", "danger")
-        return render_template("register.html", form=form, semesters=SEMESTERS)
+        with get_db() as conn:
+            departments = conn.execute("SELECT id, code, name FROM departments ORDER BY name").fetchall()
+        return render_template("register.html", form=form, semesters=SEMESTERS, departments=departments)
     if semester not in SEMESTERS:
         flash("Please choose a valid semester.", "danger")
-        return render_template("register.html", form=form, semesters=SEMESTERS)
+        with get_db() as conn:
+            departments = conn.execute("SELECT id, code, name FROM departments ORDER BY name").fetchall()
+        return render_template("register.html", form=form, semesters=SEMESTERS, departments=departments)
+    if not department_id:
+        flash("Please select a department.", "danger")
+        with get_db() as conn:
+            departments = conn.execute("SELECT id, code, name FROM departments ORDER BY name").fetchall()
+        return render_template("register.html", form=form, semesters=SEMESTERS, departments=departments)
 
     reserved = {
         "superadmin", "coadmin", "meadmin", "mtadmin", "ceadmin", "mcadmin",
@@ -348,26 +419,35 @@ def register():
     }
     if roll.lower() in reserved:
         flash("That roll number cannot be used for student registration.", "danger")
-        return render_template("register.html", form=form, semesters=SEMESTERS)
+        with get_db() as conn:
+            departments = conn.execute("SELECT id, code, name FROM departments ORDER BY name").fetchall()
+        return render_template("register.html", form=form, semesters=SEMESTERS, departments=departments)
 
     with get_db() as conn:
-        dept = conn.execute(
-            "SELECT id FROM departments WHERE code = ?", (COMPUTER_DEPT_CODE,)
-        ).fetchone()
+        dept = conn.execute("SELECT id FROM departments WHERE id = ?", (department_id,)).fetchone()
         if not dept:
-            flash("Computer Engineering department is not set up yet.", "danger")
-            return render_template("register.html", form=form, semesters=SEMESTERS)
+            flash("Selected department is not valid.", "danger")
+            return render_template("register.html", form=form, semesters=SEMESTERS, departments=departments)
 
         taken_user = conn.execute(
             "SELECT id FROM users WHERE LOWER(username) = LOWER(?)", (roll,)
         ).fetchone()
         taken_student = conn.execute(
-            "SELECT id FROM students WHERE UPPER(student_id) = UPPER(?)", (roll,)
+            "SELECT id, user_id FROM students WHERE UPPER(student_id) = UPPER(?)", (roll,)
         ).fetchone()
-        if taken_user or taken_student:
+        
+        if taken_user:
             flash("This roll number is already registered. Please log in.", "warning")
             return redirect(url_for("auth.login"))
+        
+        # If student exists in students table but not in users (old data), clean it up
+        if taken_student and not taken_student["user_id"]:
+            conn.execute(
+                "DELETE FROM students WHERE student_id = ?",
+                (roll,)
+            )
 
+        # Create user
         cur = conn.execute(
             """
             INSERT INTO users (username, password_hash, role, full_name, department_id)
@@ -377,13 +457,15 @@ def register():
         )
         user_id = cur.lastrowid
         academic_batch = academic_batch_from_enrollment(roll, "2024-2027")
+        
+        # Create student record
         conn.execute(
             """
             INSERT INTO students
-            (student_id, full_name, department_id, semester, section, academic_batch, user_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            (student_id, full_name, department_id, semester, section, academic_batch, user_id, email)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (roll, full_name, dept["id"], semester, section, academic_batch, user_id),
+            (roll, full_name, dept["id"], semester, section, academic_batch, user_id, email),
         )
         conn.commit()
 
@@ -445,6 +527,170 @@ def mark_all_notifications_read():
     return redirect(url_for("auth.notifications"))
 
 
+@auth_bp.route("/forgot-password", methods=["GET", "POST"])
+def forgot_password():
+    """Handle password reset requests."""
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        if not username:
+            flash("Please enter your username, employee ID, or roll number.", "warning")
+            return render_template("forgot_password.html")
+        
+        # Clean up expired tokens first
+        cleanup_expired_tokens()
+        
+        with get_db() as conn:
+            # Try to find user by username, student_id, or employee_id and get email
+            user = conn.execute(
+                """
+                SELECT u.*, s.student_id, s.email AS student_email, t.employee_id, t.email AS teacher_email
+                FROM users u
+                LEFT JOIN students s ON s.user_id = u.id
+                LEFT JOIN teachers t ON t.user_id = u.id
+                WHERE LOWER(u.username) = LOWER(?)
+                   OR UPPER(s.student_id) = UPPER(?)
+                   OR UPPER(t.employee_id) = UPPER(?)
+                """,
+                (username, username, username),
+            ).fetchone()
+            
+            if not user:
+                # Don't reveal if user exists for security
+                flash("If an account exists with that identifier, a password reset link will be sent to the registered email address.", "info")
+                return render_template("forgot_password.html")
+            
+            # Get email based on user role:
+            # - student: from students table
+            # - teacher: from teachers table
+            # - dept_admin, super_admin: from users table
+            user_email = None
+            role = user["role"]
+            if role == "student":
+                user_email = user["student_email"]
+            elif role == "teacher":
+                user_email = user["teacher_email"]
+            elif role in ("dept_admin", "super_admin"):
+                user_email = user["email"]
+            
+            if not user_email:
+                flash("This account does not have a registered email address. Please contact your department administrator.", "warning")
+                return render_template("forgot_password.html")
+            
+            # Generate reset token (expires in 15 minutes)
+            token = generate_reset_token(user["id"], expiry_minutes=15)
+            
+            # Generate reset URL
+            # Use localhost for local testing, will need to update for production
+            reset_url = url_for("auth.reset_password", token=token, _external=True)
+            
+            # Send email
+            subject = "Password Reset Request - RemedialPro"
+            body = f"""
+Hello {user['full_name']},
+
+You have requested a password reset for your RemedialPro account.
+
+Click the link below to reset your password (this link will expire in 15 minutes):
+
+{reset_url}
+
+If you did not request this password reset, please ignore this email and your password will remain unchanged.
+
+For security reasons, please do not share this link with anyone.
+
+Best regards,
+RemedialPro Team
+"""
+            
+            html_body = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .header {{ background-color: #0f172a; color: white; padding: 20px; text-align: center; }}
+        .content {{ background-color: #f8fafc; padding: 20px; border-radius: 5px; }}
+        .button {{ display: inline-block; background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin: 20px 0; }}
+        .footer {{ margin-top: 20px; text-align: center; color: #64748b; font-size: 12px; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2>RemedialPro</h2>
+        </div>
+        <div class="content">
+            <p>Hello {user['full_name']},</p>
+            <p>You have requested a password reset for your RemedialPro account.</p>
+            <p>Click the button below to reset your password (this link will expire in 15 minutes):</p>
+            <center>
+                <a href="{reset_url}" class="button">Reset Password</a>
+            </center>
+            <p>Or copy and paste this link into your browser:</p>
+            <p style="word-break: break-all; color: #2563eb;">{reset_url}</p>
+            <p>If you did not request this password reset, please ignore this email and your password will remain unchanged.</p>
+            <p>For security reasons, please do not share this link with anyone.</p>
+        </div>
+        <div class="footer">
+            <p>Best regards,<br>RemedialPro Team</p>
+        </div>
+    </div>
+</body>
+</html>
+"""
+            
+            email_sent = send_email(user_email, subject, body, html_body)
+            
+            if email_sent:
+                flash("A password reset link has been sent to your registered email address. Please check your inbox (and spam folder).", "success")
+            else:
+                flash("There was an error sending the email. Please try again or contact your administrator.", "danger")
+            
+            return redirect(url_for("auth.login"))
+    
+    return render_template("forgot_password.html")
+
+
+@auth_bp.route("/reset-password/<token>", methods=["GET", "POST"])
+def reset_password(token):
+    """Handle password reset with token."""
+    # Clean up expired tokens
+    cleanup_expired_tokens()
+    
+    user_id = validate_reset_token(token)
+    if not user_id:
+        flash("Invalid or expired reset link. Please request a new password reset.", "danger")
+        return redirect(url_for("auth.forgot_password"))
+    
+    if request.method == "POST":
+        password = request.form.get("password", "")
+        confirm = request.form.get("confirm_password", "")
+        
+        if len(password) < 4:
+            flash("Password must be at least 4 characters.", "danger")
+            return render_template("reset_password.html", token=token)
+        
+        if password != confirm:
+            flash("Passwords do not match.", "danger")
+            return render_template("reset_password.html", token=token)
+        
+        with get_db() as conn:
+            # Update password
+            conn.execute(
+                "UPDATE users SET password_hash = ? WHERE id = ?",
+                (hash_password(password), user_id),
+            )
+            # Mark token as used (pass connection to avoid nested connection lock)
+            mark_token_used(token, conn)
+            conn.commit()
+        
+        flash("Password has been reset successfully. You can now log in with your new password.", "success")
+        return redirect(url_for("auth.login"))
+    
+    return render_template("reset_password.html", token=token)
+
+
 # ---------------------------------------------------------
 # ADMIN PORTAL
 # ---------------------------------------------------------
@@ -482,6 +728,26 @@ def dashboard():
             totals_params.append(dept_id)
         totals_query += " GROUP BY r.academic_batch, r.semester ORDER BY r.academic_batch, r.semester"
         batch_totals = conn.execute(totals_query, totals_params).fetchall()
+
+        # Department-wise statistics for super admin
+        department_stats = None
+        if user["role"] == "super_admin":
+            department_stats = conn.execute("""
+                SELECT d.id, d.code, d.name,
+                       COUNT(DISTINCT st.id) AS student_count,
+                       COUNT(DISTINCT rb.id) AS batch_count,
+                       COUNT(DISTINCT tt.id) AS scheduled_count,
+                       COALESCE(AVG(sa.attendance_percent), 0) AS avg_attendance,
+                       (SELECT COUNT(*) FROM results r WHERE r.department_id = d.id AND r.result = 'FAIL') AS failure_count
+                FROM departments d
+                LEFT JOIN students st ON st.department_id = d.id
+                LEFT JOIN remedial_batches rb ON rb.department_id = d.id
+                LEFT JOIN timetable tt ON tt.batch_id = rb.id
+                LEFT JOIN semester_attendance sa ON sa.student_id = st.id
+                GROUP BY d.id, d.code, d.name
+                ORDER BY d.name
+            """).fetchall()
+
     return render_template(
         "admin/dashboard.html",
         user=user,
@@ -492,6 +758,7 @@ def dashboard():
         batch_totals=batch_totals,
         academic_batches=ACADEMIC_BATCHES,
         semesters=SEMESTERS,
+        department_stats=department_stats,
     )
 
 
@@ -716,6 +983,12 @@ def confirm_attc_import():
         inserted_backlogs = 0
         updated_cgpa = 0
 
+        # Ensure we have a valid department_id for student insertion
+        # _dept_scope returns None for super_admin, but students table requires NOT NULL department_id
+        # ATTC format is for Computer Engineering, so fall back to computer department ID
+        co_dept_id = _computer_dept_id(conn)
+        effective_dept_id = dept_id or co_dept_id
+
         if is_attc:
             for student_rec in parsed["records"]:
                 enroll_id = student_rec["student_id"]
@@ -749,13 +1022,13 @@ def confirm_attc_import():
                         (student_id, full_name, department_id, semester, section, academic_batch, cgpa)
                         VALUES (?, ?, ?, ?, ?, ?, ?)
                         """,
-                        (enroll_id, name, dept_id, current_semester, "A", academic_batch, cgpa),
+                        (enroll_id, name, effective_dept_id, current_semester, "A", academic_batch, cgpa),
                     )
                     student_pk = cur.lastrowid
                     inserted_students += 1
 
                 conn.execute("UPDATE students SET user_id = ? WHERE id = ?", (
-                    _ensure_student_login(conn, enroll_id, name, dept_id), student_pk
+                    _ensure_student_login(conn, enroll_id, name, effective_dept_id), student_pk
                 ))
 
                 for sem_data in student_rec["semester_backlogs"]:
@@ -771,14 +1044,24 @@ def confirm_attc_import():
 
                     for subject_name in failed_subjects:
                         subject_code = subject_name[:12].upper().replace(" ", "")
+                        
+                        # Use exact matching only - no partial matches to prevent theory/lab confusion
                         subject = conn.execute(
-                            "SELECT id FROM subjects WHERE code = ? OR name = ?",
-                            (subject_code, subject_name),
+                            "SELECT id FROM subjects WHERE UPPER(name) = UPPER(?)",
+                            (subject_name,),
                         ).fetchone()
+                        
+                        # If no exact name match, try exact code match
+                        if not subject:
+                            subject = conn.execute(
+                                "SELECT id FROM subjects WHERE UPPER(code) = UPPER(?)",
+                                (subject_code,),
+                            ).fetchone()
+                        
                         if not subject:
                             cur = conn.execute(
                                 "INSERT INTO subjects (code, name, department_id) VALUES (?, ?, ?)",
-                                (subject_code, subject_name, dept_id),
+                                (subject_code, subject_name, effective_dept_id),
                             )
                             subject_id = cur.lastrowid
                         else:
@@ -822,7 +1105,7 @@ def confirm_attc_import():
                              academic_batch, subject_id, marks, pass_marks, result)
                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                             """,
-                            (enroll_id, name, dept_id, semester, "A",
+                            (enroll_id, name, effective_dept_id, semester, "A",
                               academic_batch, subject_id, 0, 40, "FAIL"),
                         )
         else:
@@ -1505,6 +1788,7 @@ def failure_list():
         semester=int(semester) if semester else None,
         academic_batch=academic_batch or None,
         academic_batches=academic_batches,
+        ACADEMIC_BATCHES=ACADEMIC_BATCHES,
         semesters=SEMESTERS,
         batch_totals=batch_totals,
     )
@@ -1581,15 +1865,6 @@ def students():
         filtered.sort(key=lambda s: (not s["is_weak"], s.get("academic_batch") or "", s.get("full_name") or ""))
         weak_students = [s for s in filtered if s["is_weak"]]
 
-        batch_query = "SELECT DISTINCT academic_batch FROM students WHERE academic_batch IS NOT NULL AND academic_batch != ''"
-        batch_params = []
-        if dept_id:
-            batch_query += " AND department_id = ?"
-            batch_params.append(dept_id)
-        batch_query += " ORDER BY academic_batch"
-        stored_batches = [r["academic_batch"] for r in conn.execute(batch_query, batch_params).fetchall()]
-        academic_batches = list(dict.fromkeys(ACADEMIC_BATCHES + stored_batches))
-
     return render_template(
         "admin/students.html",
         user=user,
@@ -1597,7 +1872,7 @@ def students():
         weak_students=weak_students,
         q=q,
         academic_batch=academic_batch or None,
-        academic_batches=academic_batches,
+        academic_batches=ACADEMIC_BATCHES,
         low_threshold=threshold,
     )
 
@@ -1610,6 +1885,7 @@ def teachers():
     if request.method == "POST":
         eid = request.form.get("employee_id", "").strip()
         name = request.form.get("full_name", "").strip()
+        email = request.form.get("email", "").strip()
         department = dept_id or request.form.get("department_id")
 
         if not eid or not name or not department:
@@ -1628,8 +1904,8 @@ def teachers():
                 return redirect(url_for("admin.teachers"))
 
             cur = conn.execute(
-                "INSERT INTO teachers (employee_id, full_name, department_id) VALUES (?, ?, ?)",
-                (eid, name, department),
+                "INSERT INTO teachers (employee_id, full_name, department_id, email) VALUES (?, ?, ?, ?)",
+                (eid, name, department, email if email else None),
             )
             teacher_pk = cur.lastrowid
             conn.execute(
@@ -1687,6 +1963,7 @@ def departments():
                 username = request.form.get("username", "").strip().lower()
                 password = request.form.get("password", "")
                 full_name = request.form.get("full_name", "").strip()
+                email = request.form.get("email", "").strip()
                 department_id = request.form.get("department_id", type=int)
                 if not username or len(password) < 4 or not full_name or not department_id:
                     flash("Enter a name, department, username, and password of at least 4 characters.", "warning")
@@ -1694,8 +1971,8 @@ def departments():
                 if conn.execute("SELECT 1 FROM users WHERE LOWER(username) = ?", (username,)).fetchone():
                     flash("That username is already in use.", "danger")
                     return redirect(url_for("admin.departments"))
-                conn.execute("INSERT INTO users (username, password_hash, role, full_name, department_id) VALUES (?, ?, 'dept_admin', ?, ?)",
-                             (username, hash_password(password), full_name, department_id))
+                conn.execute("INSERT INTO users (username, password_hash, role, full_name, department_id, email) VALUES (?, ?, 'dept_admin', ?, ?, ?)",
+                             (username, hash_password(password), full_name, department_id, email if email else None))
                 conn.commit()
                 flash(f"Department admin {username} created. They can sign in with that username and password.", "success")
             elif action == "teacher":
@@ -1703,6 +1980,7 @@ def departments():
                 password = request.form.get("password", "")
                 full_name = request.form.get("full_name", "").strip()
                 employee_id = request.form.get("employee_id", "").strip()
+                email = request.form.get("email", "").strip()
                 department_id = request.form.get("department_id", type=int)
                 if not username or len(password) < 4 or not full_name or not employee_id or not department_id:
                     flash("Enter all required fields: username, password, full name, employee ID, and department.", "warning")
@@ -1714,8 +1992,8 @@ def departments():
                     flash("That employee ID is already in use.", "danger")
                     return redirect(url_for("admin.departments"))
                 cur = conn.execute(
-                    "INSERT INTO teachers (employee_id, full_name, department_id) VALUES (?, ?, ?)",
-                    (employee_id, full_name, department_id),
+                    "INSERT INTO teachers (employee_id, full_name, department_id, email) VALUES (?, ?, ?, ?)",
+                    (employee_id, full_name, department_id, email if email else None),
                 )
                 teacher_pk = cur.lastrowid
                 conn.execute(
@@ -1746,8 +2024,14 @@ def departments():
 
     with get_db() as conn:
         department_rows = conn.execute("""
-            SELECT d.*, (SELECT COUNT(*) FROM users u WHERE u.department_id = d.id AND u.role = 'dept_admin') AS admin_count,
-                   (SELECT COUNT(*) FROM teachers t WHERE t.department_id = d.id) AS teacher_count
+            SELECT d.*,
+                   (SELECT COUNT(*) FROM users u WHERE u.department_id = d.id AND u.role = 'dept_admin') AS admin_count,
+                   (SELECT COUNT(*) FROM teachers t WHERE t.department_id = d.id) AS teacher_count,
+                   (SELECT COUNT(*) FROM students s WHERE s.department_id = d.id) AS student_count,
+                   (SELECT COUNT(*) FROM remedial_batches rb WHERE rb.department_id = d.id) AS batch_count,
+                   (SELECT COUNT(*) FROM timetable tt JOIN remedial_batches rb ON rb.id = tt.batch_id WHERE rb.department_id = d.id) AS scheduled_count,
+                   COALESCE((SELECT AVG(sa.attendance_percent) FROM semester_attendance sa JOIN students s ON s.id = sa.student_id WHERE s.department_id = d.id), 0) AS avg_attendance,
+                   (SELECT COUNT(*) FROM results r WHERE r.department_id = d.id AND r.result = 'FAIL') AS failure_count
             FROM departments d ORDER BY d.name
         """).fetchall()
         admins = conn.execute("""
@@ -1760,6 +2044,80 @@ def departments():
             LEFT JOIN users u ON u.id = t.user_id ORDER BY d.code, t.full_name
         """).fetchall()
     return render_template("admin/departments.html", user=get_current_user(), departments=department_rows, admins=admins, teachers=teachers)
+
+
+@admin_bp.route("/department-admin/<int:admin_id>/reset-password", methods=["POST"])
+@login_required(roles=["super_admin"])
+def reset_department_admin_password(admin_id):
+    """Super Admin securely resets a department administrator's password."""
+    user = get_current_user()
+    new_password = request.form.get("new_password", "").strip()
+    confirm_password = request.form.get("confirm_password", "").strip()
+
+    if len(new_password) < 6:
+        flash("Password must be at least 6 characters.", "warning")
+        return redirect(url_for("admin.departments"))
+    if new_password != confirm_password:
+        flash("Passwords do not match.", "warning")
+        return redirect(url_for("admin.departments"))
+
+    with get_db() as conn:
+        admin = conn.execute(
+            """
+            SELECT u.id, u.username, u.full_name, d.code AS dept_code
+            FROM users u
+            JOIN departments d ON d.id = u.department_id
+            WHERE u.id = ? AND u.role = 'dept_admin'
+            """,
+            (admin_id,),
+        ).fetchone()
+        if not admin:
+            flash("Department administrator not found.", "danger")
+            return redirect(url_for("admin.departments"))
+
+        conn.execute(
+            "UPDATE users SET password_hash = ? WHERE id = ?",
+            (hash_password(new_password), admin_id),
+        )
+        conn.commit()
+        log_audit(
+            user["id"],
+            "RESET_DEPT_ADMIN_PASSWORD",
+            f"Reset password for dept admin {admin['username']} ({admin['dept_code']})",
+        )
+        flash(
+            f"Password reset successfully for {admin['full_name']} ({admin['username']}). "
+            "Share the new password securely with the administrator.",
+            "success",
+        )
+
+    return redirect(url_for("admin.departments"))
+
+
+@admin_bp.route("/failed-logins")
+@login_required(roles=["super_admin", "dept_admin"])
+def failed_logins():
+    """View recent failed login attempts (admin review)."""
+    user = get_current_user()
+    dept_id = _dept_scope(user)
+    with get_db() as conn:
+        if user["role"] == "super_admin":
+            rows = conn.execute(
+                """
+                SELECT * FROM failed_logins
+                ORDER BY attempted_at DESC
+                LIMIT 200
+                """
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT * FROM failed_logins
+                ORDER BY attempted_at DESC
+                LIMIT 200
+                """
+            ).fetchall()
+    return render_template("admin/failed_logins.html", user=user, failed_logins=rows)
 
 
 @admin_bp.route("/clear-database", methods=["GET", "POST"])
@@ -1788,15 +2146,16 @@ def clear_database():
                 tables_to_clear = [
                     "timetable",
                     "remedial_students",
-                    "remedial_batches",
-                    "peer_mentors",
-                    "student_feedback",
+                    "batch_attendance",        # Must be before remedial_batches and students (FK refs)
+                    "student_feedback",        # References remedial_batches (NO ACTION) and students
+                    "peer_mentors",            # References remedial_batches (NO ACTION) and students
+                    "extra_class_requests",    # References remedial_batches (NO ACTION), subjects, students
                     "teacher_reports",
                     "attendance",
                     "semester_attendance",
                     "student_backlog_subjects",
                     "results",
-                    "extra_class_requests",
+                    "remedial_batches",
                     "teachers",
                     "students",
                     "classrooms",
@@ -1945,6 +2304,7 @@ def semester_attendance():
         records=records,
         low_attendance=low_attendance,
         academic_batches=academic_batches,
+        ACADEMIC_BATCHES=ACADEMIC_BATCHES,
         filter_batch=filter_batch,
         filter_sem=filter_sem,
         just_uploaded=just_uploaded,
@@ -2029,10 +2389,14 @@ def semester_attendance_preview():
                     if dept_id and st["department_id"] != dept_id:
                         continue
 
+                    # Use exact subject name and code from the uploaded file
+                    subject_name = rec.get("subject")
+                    subject_code = rec.get("subject_code")
+                    
                     subject_id = _get_or_create_subject(
                         conn,
-                        rec.get("subject"),
-                        rec.get("subject_code"),
+                        subject_name,
+                        subject_code,
                         st["department_id"],
                     )
                     batch_value = parsed["academic_batch"] or st["academic_batch"]
@@ -2579,6 +2943,93 @@ def batch_detail(batch_id):
         attendance_map=attendance_map,
         latest_report=latest_report,
         routine_slots=routine_slots,
+    )
+
+
+@teacher_bp.route("/extra-class-attendance/<int:batch_id>", methods=["GET", "POST"])
+@login_required(roles=["teacher"])
+def extra_class_attendance(batch_id):
+    """Extra class attendance checklist for teachers to mark daily attendance."""
+    user = get_current_user()
+    attendance_date = request.form.get("attendance_date") or request.args.get(
+        "date", datetime.now().strftime("%Y-%m-%d")
+    )
+    with get_db() as conn:
+        teacher = conn.execute(
+            "SELECT * FROM teachers WHERE user_id = ?", (user["id"],)
+        ).fetchone()
+        if not teacher:
+            flash("Teacher profile not found.", "danger")
+            return redirect(url_for("auth.logout"))
+
+        batch = conn.execute(
+            """
+            SELECT rb.*, s.name AS subject_name, s.code AS subject_code, c.room_code
+            FROM remedial_batches rb
+            JOIN subjects s ON s.id = rb.subject_id
+            LEFT JOIN classrooms c ON c.id = rb.classroom_id
+            WHERE rb.id = ? AND rb.teacher_id = ?
+            """,
+            (batch_id, teacher["id"]),
+        ).fetchone()
+        if not batch:
+            flash("Batch not found or not assigned to you.", "danger")
+            return redirect(url_for("teacher.dashboard"))
+
+        students = conn.execute(
+            """
+            SELECT st.*
+            FROM remedial_students rs
+            JOIN students st ON st.id = rs.student_id
+            WHERE rs.batch_id = ?
+            ORDER BY st.full_name
+            """,
+            (batch_id,),
+        ).fetchall()
+
+        if request.method == "POST":
+            marked_count = 0
+            for student in students:
+                raw_status = (request.form.get(f"att_{student['id']}") or "ABSENT").strip().upper()
+                status = "PRESENT" if raw_status == "PRESENT" else "ABSENT"
+                remarks = request.form.get(f"remarks_{student['id']}", "").strip()
+
+                conn.execute(
+                    """
+                    INSERT INTO extra_class_attendance
+                    (batch_id, student_id, attendance_date, status, marked_by, remarks)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(batch_id, student_id, attendance_date)
+                    DO UPDATE SET status = excluded.status,
+                                  marked_by = excluded.marked_by,
+                                  remarks = excluded.remarks
+                    """,
+                    (batch_id, student["id"], attendance_date, status, user["id"], remarks),
+                )
+                marked_count += 1
+
+            conn.commit()
+            log_audit(user["id"], "MARK_EXTRA_CLASS_ATTENDANCE", f"Marked extra class attendance for {batch['batch_code']} ({marked_count} students) on {attendance_date}")
+            flash(f"Extra class attendance for {marked_count} student(s) successfully saved for {batch['batch_code']} on {attendance_date}.", "success")
+            return redirect(url_for("teacher.extra_class_attendance", batch_id=batch_id, date=attendance_date))
+
+        # Query attendance on selected date
+        rows = conn.execute(
+            """
+            SELECT student_id, status, remarks FROM extra_class_attendance
+            WHERE batch_id = ? AND attendance_date = ?
+            """,
+            (batch_id, attendance_date),
+        ).fetchall()
+        attendance_map = {r["student_id"]: {"status": r["status"], "remarks": r.get("remarks")} for r in rows}
+
+    return render_template(
+        "teacher/extra_class_attendance.html",
+        user=user,
+        batch=batch,
+        students=students,
+        attendance_date=attendance_date,
+        attendance_map=attendance_map,
     )
 
 

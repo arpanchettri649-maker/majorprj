@@ -967,11 +967,15 @@ def parse_attendance_file(path, ext):
             if pct is None:
                 continue
 
+            # Use exact subject name and code from the Excel file
+            # No automatic modifications to preserve exact matching
+            header_code = subject_name[:12].upper().replace(" ", "")
+
             records.append({
                 "student_id": sid,
                 "student_name": name,
                 "subject": subject_name,
-                "subject_code": subject_name[:12].upper().replace(" ", ""),
+                "subject_code": header_code,
                 "total_classes": total_c,
                 "classes_attended": attended_c,
                 "attendance_percent": pct,

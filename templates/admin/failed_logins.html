@@ -1,0 +1,12 @@
+{% extends "admin/dashboard.html" %}
+{% block title %}Failed Logins — Remedial Class Monitoring{% endblock %}
+{% block content %}
+<div class="page-heading mb-4"><h2>Failed Login Attempts</h2><p class="text-muted mb-0">Review unsuccessful sign-in attempts for authorized monitoring.</p></div>
+<div class="card border-0 shadow-sm"><div class="card-body"><div class="table-responsive"><table class="table align-middle"><thead><tr><th>#</th><th>Username attempted</th><th>IP address</th><th>Attempted at</th></tr></thead><tbody>
+{% for fl in failed_logins %}
+<tr><td>{{ loop.index }}</td><td><code>{{ fl.username }}</code></td><td>{{ fl.ip_address or '—' }}</td><td>{{ fl.attempted_at }}</td></tr>
+{% else %}
+<tr><td colspan="4" class="text-muted">No failed login attempts recorded.</td></tr>
+{% endfor %}
+</tbody></table></div></div></div>
+{% endblock %}

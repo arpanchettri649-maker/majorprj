@@ -2,6 +2,8 @@
 document.addEventListener('click', function (event) {
   const toggle = event.target.closest('[data-sidebar-toggle]');
   if (toggle) document.body.classList.toggle('sidebar-open');
+  const close = event.target.closest('[data-sidebar-close]');
+  if (close) document.body.classList.remove('sidebar-open');
   const passwordButton = event.target.closest('[data-toggle-password]');
   if (passwordButton) {
     const input = document.querySelector(passwordButton.dataset.togglePassword);

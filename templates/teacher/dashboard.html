@@ -37,7 +37,10 @@
         <h6>{{ b.batch_code }}</h6>
         <p class="mb-1">{{ b.subject_name }}</p>
         <p class="small text-muted">{{ b.student_count }} students · {{ b.status }}</p>
-        <a href="{{ url_for('teacher.batch_detail', batch_id=b.id) }}" class="btn btn-sm btn-primary">Mark Attendance</a>
+        <div class="d-flex gap-2">
+          <a href="{{ url_for('teacher.batch_detail', batch_id=b.id) }}" class="btn btn-sm btn-primary">Mark Attendance</a>
+          <a href="{{ url_for('teacher.extra_class_attendance', batch_id=b.id) }}" class="btn btn-sm btn-outline-primary">Extra Class</a>
+        </div>
       </div>
     </div>
   </div>

@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Sign in — Academic Support{% endblock %}
+{% block title %}Sign in — Remedial Class Monitoring{% endblock %}
 {% block auth_content %}
 <div class="login-page d-flex align-items-center justify-content-center min-vh-100">
   <div class="card shadow login-card">
     <div class="card-body p-4">
-      <h3 class="text-center mb-1">Academic Support Portal</h3>
+      <h3 class="text-center mb-1">Remedial Class Monitoring</h3>
       <p class="text-center text-muted mb-4">Secure sign in for students, teachers and administrators</p>
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% for category, message in messages %}
@@ -23,6 +23,7 @@
         <button type="submit" class="btn btn-primary w-100">Login</button>
       </form>
       <div class="text-center mt-3">
+        <a href="{{ url_for('auth.forgot_password') }}" class="d-block mb-2">Forgot Password?</a>
         <a href="{{ url_for('auth.register') }}">New student? Register with your roll number</a>
       </div>
       <small class="text-muted d-block mt-3">Students register with their roll number. Teachers sign in with the employee ID provided by an administrator.</small>

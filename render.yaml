@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: remedialpro
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app.py
+    env: python
+    plan: free
+    envVars:
+      - key: EMAIL_ADDRESS
+        sync: false
+      - key: EMAIL_APP_PASSWORD
+        sync: false
+      - key: PORT
+        value: 10000
+
